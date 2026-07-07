@@ -661,6 +661,290 @@ The `.snipx` extension is reserved for standalone SnipX/commentaria.
 Marginalia and intralinea SnipX are host-defined and do not require a separate
 extension.
 
+## Reference Implementation
+
+The v0 reference implementation should consist of:
+
+- `snipx-core`: a reusable Rust crate implementing the language core;
+- `snipx`: a small command-line driver built on `snipx-core`.
+
+The crate is the primary implementation surface. The command-line driver
+exists to expose and test parsing, visible-text extraction, snippet
+resolution, diagnostics, and canonical JSON serialisation.
+
+Host-specific integrations, including Scrivener, RTF, DOCX, EPUB,
+editor plugins, graph databases, and richer document source maps, should
+be separate tools or crates built on top of `snipx-core`.
+
+### Crate Responsibilities
+
+`snipx-core` should provide:
+
+- lossless parsing for commentaria, marginalia, and intralinea input
+  forms;
+- a typed syntax/AST layer over the lossless parse tree;
+- statement expansion for `.`, `;`, `,`, ambient subjects, and `::`
+  decoration sugar;
+- canonical visible-text extraction for plain text and Markdown;
+- exact and loose snippet matching for the v0 profiles;
+- snippet resolution to `[start, end)` offsets in the canonical
+  visible-text stream;
+- denotation and text-span value construction;
+- diagnostic production with source locations;
+- canonical JSON data structures and serialisation.
+
+The crate should not decide host policy that belongs outside the core
+language. Callers provide:
+
+- the input form: commentaria, marginalia, or intralinea;
+- the target document, if snippets must resolve against an external
+  text;
+- the active profile;
+- the ambient subject, if the input context has one;
+- the fact scope and name-scope policy;
+- any host-specific mapping from canonical offsets back to native
+  document positions.
+
+### Parser Architecture
+
+The reference parser should be lossless and Rowan-based. SnipX syntax is
+small, but comments, whitespace, embedded forms, quoted snippets,
+triple-quoted strings, decorations, and Turtle-style carry-forward are
+important enough that the concrete syntax tree should be preserved.
+
+The intended pipeline is:
+
+```text
+source text
+  -> lossless Rowan syntax tree
+  -> typed AST/query layer
+  -> expanded statements
+  -> resolved snippets
+  -> resolved facts and diagnostics
+```
+
+This design should support future formatting, editor integration,
+partial parsing, and good diagnostics without changing the public
+language.
+
+### Command-Line Driver
+
+The `snipx` command-line driver should provide three initial commands:
+
+```text
+snipx check
+snipx resolve
+snipx export
+```
+
+Input form is independent of command verb and is selected with `--as` or
+one of the equivalent short flags:
+
+```text
+--as commentaria    -c
+--as marginalia     -m
+--as intralinea     -i
+```
+
+The long form is preferred in documentation. The short flags are
+convenience aliases.
+
+Examples:
+
+```sh
+snipx check notes.snipx --as commentaria --target novel.md
+snipx check notes.snipx -c --target novel.md
+
+snipx resolve notes.txt --as marginalia --target chapter.md --ambient '[]'
+snipx resolve notes.txt -m --target chapter.md --ambient '[]'
+
+snipx export chapter.md --as intralinea --pretty
+snipx export chapter.md -i --pretty
+```
+
+`check` parses the input and reports diagnostics. If a target is
+available, `check` should also resolve snippets so that unresolved,
+ambiguous, or unsupported snippets are reported.
+
+`resolve` parses the input, extracts or receives the target visible text,
+resolves snippets, and emits resolution-oriented JSON. This output is
+intended for debugging snippets and profiles rather than for consuming
+facts.
+
+`export` parses, expands, resolves, and emits canonical SnipX JSON facts
+plus diagnostics.
+
+### CLI Options
+
+The initial command-line options should include:
+
+```text
+--as <form>          input form: commentaria, marginalia, intralinea
+-c                  alias for --as commentaria
+-m                  alias for --as marginalia
+-i                  alias for --as intralinea
+--target <path-uri> target document for snippet resolution
+--profile <name>    profile name; defaults are tool-defined
+--ambient <expr>    ambient subject expression for subjectless statements
+--pretty            pretty-print JSON output
+--strict            treat warnings as errors
+```
+
+If both `--as` and a short input-form flag are supplied, they must agree.
+Supplying more than one short input-form flag is an error.
+
+The command-line driver should support only local files and standard
+input/output in v0. Network fetching and host-specific project loading
+are outside the reference implementation.
+
+### Input Forms In The CLI
+
+Commentaria input is SnipX-by-default. The input may contain `@target`
+and `@profile` directives. Command-line `--target` and `--profile`
+values override or supply directive values according to tool policy; the
+CLI should report the effective target and profile in JSON output.
+
+Marginalia input is prose-by-default. The CLI parses unlabelled fences,
+`snipx` fences, and `///` single-line SnipX entries. Prose outside SnipX
+blocks is preserved in diagnostics and source locations, but v0 export
+does not automatically convert prose to `note` facts unless a later
+profile explicitly requests it. The CLI may receive an ambient subject
+with `--ambient`.
+
+Intralinea input is a target document containing `{{ ... }}` blocks. The
+CLI removes those blocks from the canonical visible-text stream before
+resolving snippets. The stripped visible text is the target context for
+explicit snippets and local intralinea subjects.
+
+### Reference Profiles
+
+The reference implementation should support these profiles initially:
+
+```text
+plain
+plain-loose
+markdown
+markdown-loose
+```
+
+`plain` and `plain-loose` operate over decoded text content.
+
+`markdown` and `markdown-loose` operate over rendered visible prose:
+Markdown formatting syntax is not target text. Headings, block quotes,
+list item text, code block text, inline code text, link text, and image
+alt text are visible text. Link destinations, image destinations,
+reference definitions, and raw HTML tags are not visible text. Raw HTML
+content handling may be conservative in v0; unsupported constructs that
+would affect visible-text extraction should produce diagnostics.
+
+Scrivener, RTF, DOCX, PDF, EPUB, and other rich-text profiles are
+outside the reference implementation.
+
+### Canonical JSON
+
+The reference implementation should define JSON as the only canonical
+machine output in v0. `--pretty` changes formatting only; it does not
+change the schema.
+
+Other exports, including RDF, JSON-LD, Cypher, YAML, or graph-database
+loaders, are outside the reference implementation. They may be built as
+separate tools consuming canonical SnipX JSON.
+
+The JSON output should include:
+
+- SnipX language version;
+- implementation version;
+- input form;
+- effective profile;
+- target URI or path, if any;
+- canonical visible-text metadata;
+- resolved facts;
+- resolved snippets and spans when relevant;
+- diagnostics;
+- source locations for statements, snippets, and generated facts.
+
+A minimal shape:
+
+```json
+{
+  "snipxVersion": "0.0",
+  "implementation": {
+    "name": "snipx",
+    "version": "0.0.0"
+  },
+  "input": {
+    "form": "commentaria",
+    "path": "notes.snipx"
+  },
+  "target": {
+    "uri": "novel.md",
+    "profile": "markdown-loose"
+  },
+  "visibleText": {
+    "normalisation": "NFC",
+    "length": 18422
+  },
+  "facts": [],
+  "resolutions": [],
+  "diagnostics": []
+}
+```
+
+Facts should preserve enough provenance to explain where they came from:
+
+```json
+{
+  "subject": {
+    "kind": "entity",
+    "id": "denotation:local:d1",
+    "source": {
+      "snippet": "[Alice]+",
+      "spans": [
+        {
+          "start": 120,
+          "end": 125,
+          "text": "Alice"
+        }
+      ]
+    }
+  },
+  "predicate": {
+    "kind": "predicate",
+    "value": "a"
+  },
+  "object": {
+    "kind": "name",
+    "value": "Character"
+  },
+  "origin": {
+    "path": "notes.snipx",
+    "line": 4,
+    "column": 1
+  }
+}
+```
+
+The exact schema may evolve during implementation, but v0 should keep
+JSON as the compatibility contract for other tools.
+
+### Diagnostics And Exit Codes
+
+Diagnostics should have stable codes, severity, message, source
+location, and optional related spans. They should be suitable for both
+human display and JSON output.
+
+Initial exit codes:
+
+```text
+0 success
+1 completed with errors
+2 invalid command-line usage
+3 input/output failure
+4 unsupported profile, input form, or output option
+```
+
+Warnings do not affect the exit code unless `--strict` is supplied.
+
 ## Deferred And Open Issues
 
 Deferred from v0:
