@@ -16,6 +16,13 @@ struct RegionParse {
     diagnostics: Vec<Diagnostic>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RegionContext {
+    Commentaria,
+    Marginalia,
+    Intralinea,
+}
+
 #[derive(Debug, Clone)]
 enum Event {
     Start(SyntaxKind),
@@ -48,7 +55,7 @@ pub fn parse(source: &str, options: ParseOptions) -> Parse {
 }
 
 fn parse_commentaria(source: &str) -> Parse {
-    let region = parse_snipx_region(source, 0);
+    let region = parse_snipx_region(source, 0, RegionContext::Commentaria);
     build_parse(region)
 }
 
@@ -80,7 +87,8 @@ fn parse_marginalia(source: &str) -> Parse {
             }
             if !remainder.is_empty() {
                 let region_offset = content_end - remainder.len();
-                let region = parse_snipx_region(remainder, region_offset);
+                let region =
+                    parse_snipx_region(remainder, region_offset, RegionContext::Marginalia);
                 replay_without_root(&region.events, &mut events);
                 diagnostics.extend(region.diagnostics);
             }
@@ -119,7 +127,7 @@ fn parse_marginalia(source: &str) -> Parse {
             let body_end = closing_start.unwrap_or(source.len());
             let body = &source[body_start..body_end];
             if info.is_empty() || info == "snipx" {
-                let region = parse_snipx_region(body, body_start);
+                let region = parse_snipx_region(body, body_start, RegionContext::Marginalia);
                 replay_without_root(&region.events, &mut events);
                 diagnostics.extend(region.diagnostics);
             } else if !body.is_empty() {
@@ -199,7 +207,7 @@ fn parse_intralinea(source: &str) -> Parse {
             let body_start = start + 2;
             if let Some(body_end) = find_intralinea_close(source, body_start) {
                 let body = &source[body_start..body_end];
-                let region = parse_snipx_region(body, body_start);
+                let region = parse_snipx_region(body, body_start, RegionContext::Intralinea);
                 replay_without_root(&region.events, &mut events);
                 diagnostics.extend(region.diagnostics);
                 events.push(Event::Token(SyntaxKind::RBrace, "}".to_string()));
@@ -208,7 +216,7 @@ fn parse_intralinea(source: &str) -> Parse {
                 cursor = body_end + 2;
             } else {
                 let body = &source[body_start..];
-                let region = parse_snipx_region(body, body_start);
+                let region = parse_snipx_region(body, body_start, RegionContext::Intralinea);
                 replay_without_root(&region.events, &mut events);
                 diagnostics.extend(region.diagnostics);
                 diagnostics.push(Diagnostic {
@@ -240,8 +248,8 @@ fn parse_intralinea(source: &str) -> Parse {
     })
 }
 
-fn parse_snipx_region(source: &str, offset: usize) -> RegionParse {
-    let mut parser = RegionParser::new(source, offset);
+fn parse_snipx_region(source: &str, offset: usize, context: RegionContext) -> RegionParse {
+    let mut parser = RegionParser::new(source, offset, context);
     parser.parse();
     RegionParse {
         events: parser.events,
@@ -252,17 +260,21 @@ fn parse_snipx_region(source: &str, offset: usize) -> RegionParse {
 struct RegionParser<'a> {
     source: &'a str,
     offset: usize,
+    context: RegionContext,
     pos: usize,
+    statement_seen: bool,
     events: Vec<Event>,
     diagnostics: Vec<Diagnostic>,
 }
 
 impl<'a> RegionParser<'a> {
-    fn new(source: &'a str, offset: usize) -> Self {
+    fn new(source: &'a str, offset: usize, context: RegionContext) -> Self {
         Self {
             source,
             offset,
+            context,
             pos: 0,
+            statement_seen: false,
             events: vec![Event::Start(SyntaxKind::Root)],
             diagnostics: Vec::new(),
         }
@@ -284,8 +296,10 @@ impl<'a> RegionParser<'a> {
                     LocalSubjectMarkerMatch::Valid(_) | LocalSubjectMarkerMatch::Invalid(_)
                 )
             {
+                self.statement_seen = true;
                 self.parse_decoration();
             } else {
+                self.statement_seen = true;
                 self.parse_statement();
             }
         }
@@ -329,10 +343,10 @@ impl<'a> RegionParser<'a> {
 
     fn parse_directive(&mut self) {
         let start = self.pos;
-        let kind = if !is_line_start(self.source, self.pos) {
+        let kind = if self.statement_seen || !is_line_start(self.source, self.pos) {
             self.push_diagnostic(
                 DiagnosticCode::InvalidDirectivePosition,
-                "Directives must start at the beginning of a line",
+                "Directives must appear in the header before the first statement",
                 start,
                 start + 1,
             );
@@ -368,14 +382,17 @@ impl<'a> RegionParser<'a> {
     }
 
     fn parse_decoration(&mut self) {
+        let start = self.pos;
         self.events.push(Event::Start(SyntaxKind::Decoration));
         self.token(SyntaxKind::Tilde, "~");
         self.pos += 1;
-        self.parse_statement_tail();
+        let terminated = self.parse_statement_tail();
+        self.require_commentaria_terminator(terminated, start);
         self.events.push(Event::Finish);
     }
 
     fn parse_statement(&mut self) {
+        let start = self.pos;
         self.events.push(Event::Start(SyntaxKind::Statement));
         self.events.push(Event::Start(SyntaxKind::Subject));
         if !self.parse_subject_like() {
@@ -436,15 +453,19 @@ impl<'a> RegionParser<'a> {
             self.parse_local_subject_marker();
         }
 
-        if self.peek_char() == Some('.') {
+        let terminated = if self.peek_char() == Some('.') {
             self.token(SyntaxKind::Dot, ".");
             self.pos += 1;
-        }
+            true
+        } else {
+            false
+        };
 
         self.events.push(Event::Finish);
+        self.require_commentaria_terminator(terminated, start);
     }
 
-    fn parse_statement_tail(&mut self) {
+    fn parse_statement_tail(&mut self) -> bool {
         self.consume_inline_whitespace();
         while !self.at_statement_end() {
             if matches!(
@@ -477,6 +498,20 @@ impl<'a> RegionParser<'a> {
         if self.peek_char() == Some('.') {
             self.token(SyntaxKind::Dot, ".");
             self.pos += 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn require_commentaria_terminator(&mut self, terminated: bool, statement_start: usize) {
+        if self.context == RegionContext::Commentaria && !terminated {
+            self.push_diagnostic(
+                DiagnosticCode::ParseError,
+                "Expected '.' statement terminator",
+                statement_start,
+                self.pos,
+            );
         }
     }
 
@@ -784,8 +819,13 @@ impl<'a> RegionParser<'a> {
         };
         let start = self.pos;
         let end = start + len;
-        self.events
-            .push(Event::Start(SyntaxKind::LocalSubjectMarker));
+        let disallowed = self.context != RegionContext::Intralinea;
+        let kind = if disallowed {
+            SyntaxKind::Error
+        } else {
+            SyntaxKind::LocalSubjectMarker
+        };
+        self.events.push(Event::Start(kind));
         while self.pos < end {
             match self.peek_char() {
                 Some('~') => self.token(SyntaxKind::Tilde, "~"),
@@ -796,10 +836,14 @@ impl<'a> RegionParser<'a> {
             self.advance_char();
         }
         self.events.push(Event::Finish);
-        if invalid {
+        if invalid || disallowed {
             self.push_diagnostic(
                 DiagnosticCode::InvalidLocalSubjectMarker,
-                "Invalid local subject marker",
+                if disallowed {
+                    "Local subject markers are only valid in intralinea regions"
+                } else {
+                    "Invalid local subject marker"
+                },
                 start,
                 end,
             );
@@ -835,7 +879,16 @@ impl<'a> RegionParser<'a> {
 
     fn parse_number(&mut self) {
         let start = self.pos;
-        self.consume_while(|ch| ch.is_ascii_digit() || ch == '.');
+        self.consume_while(|ch| ch.is_ascii_digit());
+        if self.peek_char() == Some('.')
+            && self.source[self.pos + 1..]
+                .chars()
+                .next()
+                .is_some_and(|ch| ch.is_ascii_digit())
+        {
+            self.pos += 1;
+            self.consume_while(|ch| ch.is_ascii_digit());
+        }
         self.events.push(Event::Start(SyntaxKind::Number));
         self.token_from(SyntaxKind::Text, start, self.pos);
         self.events.push(Event::Finish);
@@ -1160,15 +1213,27 @@ fn is_identifier_continue(ch: char) -> bool {
 fn snippet_contains_range(source: &str) -> bool {
     let mut chars = source.char_indices().peekable();
     let mut quoted = false;
-    let mut captured = false;
+    let mut escaped = false;
+    let mut capture_depth = 0usize;
 
     while let Some((_, ch)) = chars.next() {
+        if quoted {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                quoted = false;
+            }
+            continue;
+        }
+
         match ch {
-            '"' if !captured => quoted = !quoted,
-            '{' if !quoted => captured = true,
-            '}' if !quoted => captured = false,
-            ']' if !quoted && !captured => return false,
-            '.' if !quoted && !captured && chars.peek().is_some_and(|(_, next)| *next == '.') => {
+            '"' if capture_depth == 0 => quoted = true,
+            '{' => capture_depth += 1,
+            '}' if capture_depth > 0 => capture_depth -= 1,
+            ']' if capture_depth == 0 => return false,
+            '.' if capture_depth == 0 && chars.peek().is_some_and(|(_, next)| *next == '.') => {
                 return true;
             }
             _ => {}

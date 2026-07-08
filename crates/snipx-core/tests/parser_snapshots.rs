@@ -399,3 +399,154 @@ fn ordinary_strings_honour_escaped_quotes_and_backslashes() {
     assert_eq!(parsed.syntax().to_string(), src);
     assert_eq!(string.to_string(), r#""a \"quote\" and \\ path""#);
 }
+
+#[test]
+fn numbers_do_not_consume_statement_terminators() {
+    let src = "Answer value 42.\nRatio value 1.5.\n";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    let numbers: Vec<_> = parsed
+        .syntax()
+        .descendants()
+        .filter(|node| node.kind() == SyntaxKind::Number)
+        .map(|node| node.to_string())
+        .collect();
+
+    assert!(parsed.diagnostics().is_empty());
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert_eq!(numbers, ["42", "1.5"]);
+    assert_eq!(
+        parsed
+            .syntax()
+            .descendants_with_tokens()
+            .filter_map(|element| element.into_token())
+            .filter(|token| token.kind() == SyntaxKind::Dot)
+            .count(),
+        2
+    );
+
+    let malformed = parse(
+        "Value is 1.2.3.",
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    assert_eq!(malformed.syntax().to_string(), "Value is 1.2.3.");
+    assert_eq!(
+        malformed
+            .syntax()
+            .descendants()
+            .filter(|node| node.kind() == SyntaxKind::Number)
+            .map(|node| node.to_string())
+            .collect::<Vec<_>>(),
+        ["1.2", "3"]
+    );
+}
+
+#[test]
+fn snippet_ranges_honour_escaped_quotes_and_backslashes() {
+    for (src, expected_kind) in [
+        (r#"["quoted \"..\" text"] p O."#, SyntaxKind::Snippet),
+        (r#"["path \\"..outside] p O."#, SyntaxKind::RangeSnippet),
+    ] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Commentaria,
+            },
+        );
+        let snippet = parsed
+            .syntax()
+            .descendants()
+            .find(|node| matches!(node.kind(), SyntaxKind::Snippet | SyntaxKind::RangeSnippet))
+            .expect("snippet");
+
+        assert!(parsed.diagnostics().is_empty(), "{src:?}");
+        assert_eq!(parsed.syntax().to_string(), src);
+        assert_eq!(snippet.kind(), expected_kind, "{src:?}");
+    }
+}
+
+#[test]
+fn statement_terminator_policy_depends_on_input_form() {
+    let commentaria = parse(
+        "Alice friend Bob",
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    assert_eq!(commentaria.syntax().to_string(), "Alice friend Bob");
+    assert!(commentaria.diagnostics().iter().any(|diagnostic| {
+        diagnostic.code == DiagnosticCode::ParseError
+            && diagnostic.message.contains("statement terminator")
+    }));
+
+    for (src, input_form) in [
+        ("{{Alice friend Bob}}", InputForm::Intralinea),
+        ("/// Alice friend Bob\n", InputForm::Marginalia),
+    ] {
+        let parsed = parse(src, ParseOptions { input_form });
+
+        assert!(parsed.diagnostics().is_empty(), "{src:?}");
+        assert_eq!(parsed.syntax().to_string(), src);
+    }
+}
+
+#[test]
+fn directives_after_statements_are_diagnosed_in_each_region() {
+    for (src, input_form) in [
+        (
+            "Alice friend Bob.\n@profile loose\n",
+            InputForm::Commentaria,
+        ),
+        (
+            "```\nAlice friend Bob.\n@profile loose\n```\n",
+            InputForm::Marginalia,
+        ),
+        (
+            "{{Alice friend Bob.\n@profile loose\n}}",
+            InputForm::Intralinea,
+        ),
+    ] {
+        let parsed = parse(src, ParseOptions { input_form });
+
+        assert_eq!(parsed.syntax().to_string(), src);
+        assert!(
+            parsed
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagnosticCode::InvalidDirectivePosition),
+            "{src:?}"
+        );
+    }
+}
+
+#[test]
+fn local_subject_markers_are_rejected_outside_intralinea() {
+    for (src, input_form) in [
+        ("< p O.", InputForm::Commentaria),
+        ("/// ~<> p O.\n", InputForm::Marginalia),
+    ] {
+        let parsed = parse(src, ParseOptions { input_form });
+
+        assert_eq!(parsed.syntax().to_string(), src);
+        assert!(
+            parsed
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagnosticCode::InvalidLocalSubjectMarker),
+            "{src:?}"
+        );
+        assert!(
+            !parsed
+                .syntax()
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::LocalSubjectMarker),
+            "{src:?}"
+        );
+    }
+}
