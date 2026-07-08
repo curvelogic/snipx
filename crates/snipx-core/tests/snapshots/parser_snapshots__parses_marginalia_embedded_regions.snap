@@ -1,0 +1,60 @@
+---
+source: crates/snipx-core/tests/parser_snapshots.rs
+assertion_line: 78
+expression: parsed.debug_tree()
+---
+ROOT
+  MARGINALIA_TEXT "Alice feels evasive.\n\n"
+  FENCE
+    BACKTICK "```"
+    WHITESPACE "\n"
+    STATEMENT
+      SUBJECT
+        SNIPPET
+          L_BRACK "["
+          TEXT "Alice"
+          R_BRACK "]"
+        WHITESPACE " "
+        PREDICATE
+          IDENT
+            TEXT "mood"
+        WHITESPACE " "
+        OBJECT_LIST
+          OBJECT
+            STRING
+              QUOTE "\""
+              TEXT "guarded"
+              QUOTE "\""
+        DOT "."
+      WHITESPACE "\n"
+    BACKTICK "```"
+    WHITESPACE "\n"
+  MARGINALIA_TEXT "\n"
+  LINE_COMMENT
+    SLASH_SLASH_SLASH "///"
+    WHITESPACE " "
+    STATEMENT
+      SUBJECT
+        SNIPPET
+          L_BRACK "["
+          TEXT "door"
+          R_BRACK "]"
+        WHITESPACE " "
+        PREDICATE
+          IDENT
+            TEXT "motif"
+        WHITESPACE " "
+        OBJECT_LIST
+          OBJECT
+            IDENT
+              TEXT "Threshold"
+        DOT "."
+  WHITESPACE "\n"
+  MARGINALIA_TEXT "\n"
+  FENCE
+    BACKTICK "```"
+    FENCE_INFO "js"
+    WHITESPACE "\n"
+    FENCE_BODY "console.log(\"not snipx\");\n"
+    BACKTICK "```"
+    WHITESPACE "\n"
