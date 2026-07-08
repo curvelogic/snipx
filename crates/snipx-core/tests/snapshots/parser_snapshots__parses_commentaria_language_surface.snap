@@ -1,6 +1,5 @@
 ---
 source: crates/snipx-core/tests/parser_snapshots.rs
-assertion_line: 52
 expression: parsed.debug_tree()
 ---
 ROOT
@@ -61,19 +60,17 @@ ROOT
       OBJECT
         IDENT
           TEXT "Oxford"
-      SEMICOLON ";"
-  WHITESPACE "\n  "
-  STATEMENT
-    SUBJECT
+    SEMICOLON ";"
+    WHITESPACE "\n  "
+    PREDICATE
       IDENT
         TEXT "friend"
     WHITESPACE " "
-    PREDICATE
-      IDENT
-        TEXT "Bob"
-    WHITESPACE " "
     OBJECT_LIST
       OBJECT
+        IDENT
+          TEXT "Bob"
+        WHITESPACE " "
       COLON_COLON "::"
       OBJECT
         STRING

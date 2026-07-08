@@ -58,46 +58,62 @@ fn parse_marginalia(source: &str) -> Parse {
     let mut cursor = 0;
 
     while cursor < source.len() {
-        if is_line_start(source, cursor) && source[cursor..].starts_with("///") {
+        if let Some(marker_start) = marginalia_slash_marker(source, cursor) {
             let line_end = find_line_end(source, cursor);
-            let line = &source[cursor..line_end];
+            let content_end = line_content_end(source, line_end);
+            let next_line = next_line_start(source, line_end);
             events.push(Event::Start(SyntaxKind::LineComment));
+            if marker_start > cursor {
+                events.push(Event::Token(
+                    SyntaxKind::Whitespace,
+                    source[cursor..marker_start].to_string(),
+                ));
+            }
             events.push(Event::Token(SyntaxKind::SlashSlashSlash, "///".to_string()));
 
-            let tail = &line[3..];
+            let tail_start = marker_start + 3;
+            let tail = &source[tail_start..content_end];
             let whitespace_len = leading_ws_len(tail);
             let (whitespace, remainder) = tail.split_at(whitespace_len);
             if !whitespace.is_empty() {
                 events.push(Event::Token(SyntaxKind::Whitespace, whitespace.to_string()));
             }
             if !remainder.is_empty() {
-                let region_offset = line_end - remainder.len();
+                let region_offset = content_end - remainder.len();
                 let region = parse_snipx_region(remainder, region_offset);
                 replay_without_root(&region.events, &mut events);
                 diagnostics.extend(region.diagnostics);
             }
 
             events.push(Event::Finish);
-            if line_end < source.len() {
-                events.push(Event::Token(SyntaxKind::Whitespace, "\n".to_string()));
+            if content_end < next_line {
+                events.push(Event::Token(
+                    SyntaxKind::Whitespace,
+                    source[content_end..next_line].to_string(),
+                ));
             }
-            cursor = next_line_start(source, line_end);
+            cursor = next_line;
             continue;
         }
 
         if is_line_start(source, cursor) && source[cursor..].starts_with("```") {
             let opening_end = find_line_end(source, cursor);
-            let info = source[cursor + 3..opening_end].trim();
+            let opening_content_end = line_content_end(source, opening_end);
             let body_start = next_line_start(source, opening_end);
+            let raw_info = &source[cursor + 3..opening_content_end];
+            let info = raw_info.trim();
             let closing_start = find_closing_fence(source, body_start);
 
             events.push(Event::Start(SyntaxKind::Fence));
             events.push(Event::Token(SyntaxKind::Backtick, "```".to_string()));
-            if !info.is_empty() {
-                events.push(Event::Token(SyntaxKind::FenceInfo, info.to_string()));
+            if !raw_info.is_empty() {
+                events.push(Event::Token(SyntaxKind::FenceInfo, raw_info.to_string()));
             }
-            if opening_end < source.len() {
-                events.push(Event::Token(SyntaxKind::Whitespace, "\n".to_string()));
+            if opening_content_end < body_start {
+                events.push(Event::Token(
+                    SyntaxKind::Whitespace,
+                    source[opening_content_end..body_start].to_string(),
+                ));
             }
 
             let body_end = closing_start.unwrap_or(source.len());
@@ -111,15 +127,24 @@ fn parse_marginalia(source: &str) -> Parse {
             }
 
             if let Some(closing_start) = closing_start {
-                if body_end > body_start && !body.ends_with('\n') {
-                    events.push(Event::Token(SyntaxKind::Whitespace, "\n".to_string()));
-                }
                 events.push(Event::Token(SyntaxKind::Backtick, "```".to_string()));
                 let closing_end = find_line_end(source, closing_start);
-                if closing_end < source.len() {
-                    events.push(Event::Token(SyntaxKind::Whitespace, "\n".to_string()));
+                let closing_content_end = line_content_end(source, closing_end);
+                let closing_suffix = &source[closing_start + 3..closing_content_end];
+                if !closing_suffix.is_empty() {
+                    events.push(Event::Token(
+                        SyntaxKind::FenceInfo,
+                        closing_suffix.to_string(),
+                    ));
                 }
-                cursor = next_line_start(source, closing_end);
+                let next_line = next_line_start(source, closing_end);
+                if closing_content_end < next_line {
+                    events.push(Event::Token(
+                        SyntaxKind::Whitespace,
+                        source[closing_content_end..next_line].to_string(),
+                    ));
+                }
+                cursor = next_line;
             } else {
                 diagnostics.push(Diagnostic {
                     code: DiagnosticCode::ParseError,
@@ -171,9 +196,8 @@ fn parse_intralinea(source: &str) -> Parse {
             events.push(Event::Token(SyntaxKind::LBrace, "{".to_string()));
             events.push(Event::Token(SyntaxKind::LBrace, "{".to_string()));
 
-            if let Some(end_rel) = source[start + 2..].find("}}") {
-                let body_start = start + 2;
-                let body_end = body_start + end_rel;
+            let body_start = start + 2;
+            if let Some(body_end) = find_intralinea_close(source, body_start) {
                 let body = &source[body_start..body_end];
                 let region = parse_snipx_region(body, body_start);
                 replay_without_root(&region.events, &mut events);
@@ -183,7 +207,6 @@ fn parse_intralinea(source: &str) -> Parse {
                 events.push(Event::Finish);
                 cursor = body_end + 2;
             } else {
-                let body_start = start + 2;
                 let body = &source[body_start..];
                 let region = parse_snipx_region(body, body_start);
                 replay_without_root(&region.events, &mut events);
@@ -255,7 +278,12 @@ impl<'a> RegionParser<'a> {
                 self.parse_directive();
             } else if self.peek_char().is_some_and(char::is_whitespace) {
                 self.parse_whitespace();
-            } else if self.peek_char() == Some('~') {
+            } else if self.peek_char() == Some('~')
+                && !matches!(
+                    local_subject_marker_at(self.source, self.pos),
+                    LocalSubjectMarkerMatch::Valid(_) | LocalSubjectMarkerMatch::Invalid(_)
+                )
+            {
                 self.parse_decoration();
             } else {
                 self.parse_statement();
@@ -357,38 +385,55 @@ impl<'a> RegionParser<'a> {
 
         self.consume_inline_whitespace();
 
-        if !self.at_statement_end() {
+        while !self.at_statement_end() {
             self.events.push(Event::Start(SyntaxKind::Predicate));
             self.parse_predicate_like();
             self.events.push(Event::Finish);
-        }
 
-        self.consume_inline_whitespace();
+            self.consume_inline_whitespace();
 
-        if !self.at_statement_end() {
-            self.events.push(Event::Start(SyntaxKind::ObjectList));
-            while !self.at_statement_end() {
+            if !self.at_statement_end() {
+                self.events.push(Event::Start(SyntaxKind::ObjectList));
                 self.events.push(Event::Start(SyntaxKind::Object));
                 self.parse_object_like();
                 self.events.push(Event::Finish);
                 self.consume_inline_whitespace();
-                if self.peek_char() == Some(',') {
-                    self.token(SyntaxKind::Comma, ",");
-                    self.pos += 1;
+
+                while self.peek_char() == Some(',') || self.starts_with("::") {
+                    if self.peek_char() == Some(',') {
+                        self.token(SyntaxKind::Comma, ",");
+                        self.pos += 1;
+                    } else {
+                        self.token(SyntaxKind::ColonColon, "::");
+                        self.pos += 2;
+                    }
                     self.consume_inline_whitespace();
-                } else if self.starts_with("::") {
-                    self.token(SyntaxKind::ColonColon, "::");
-                    self.pos += 2;
+                    self.events.push(Event::Start(SyntaxKind::Object));
+                    self.parse_object_like();
+                    self.events.push(Event::Finish);
                     self.consume_inline_whitespace();
-                } else if self.peek_char() == Some(';') {
-                    self.token(SyntaxKind::Semicolon, ";");
-                    self.pos += 1;
-                    self.consume_inline_whitespace();
-                } else {
+                }
+                self.events.push(Event::Finish);
+            }
+
+            if self.peek_char() == Some(';') {
+                self.token(SyntaxKind::Semicolon, ";");
+                self.pos += 1;
+                self.parse_whitespace();
+                if self.pos >= self.source.len() {
                     break;
                 }
+                continue;
             }
-            self.events.push(Event::Finish);
+
+            break;
+        }
+
+        if matches!(
+            local_subject_marker_at(self.source, self.pos),
+            LocalSubjectMarkerMatch::Valid(_) | LocalSubjectMarkerMatch::Invalid(_)
+        ) {
+            self.parse_local_subject_marker();
         }
 
         if self.peek_char() == Some('.') {
@@ -402,22 +447,30 @@ impl<'a> RegionParser<'a> {
     fn parse_statement_tail(&mut self) {
         self.consume_inline_whitespace();
         while !self.at_statement_end() {
-            self.parse_value();
-            self.consume_inline_whitespace();
-            if self.peek_char() == Some(',') {
-                self.token(SyntaxKind::Comma, ",");
-                self.pos += 1;
+            if matches!(
+                local_subject_marker_at(self.source, self.pos),
+                LocalSubjectMarkerMatch::Valid(_) | LocalSubjectMarkerMatch::Invalid(_)
+            ) {
+                self.parse_local_subject_marker();
                 self.consume_inline_whitespace();
-            } else if self.peek_char() == Some(';') {
-                self.token(SyntaxKind::Semicolon, ";");
-                self.pos += 1;
+            } else {
+                self.parse_value();
                 self.consume_inline_whitespace();
-            } else if self.starts_with("::") {
-                self.token(SyntaxKind::ColonColon, "::");
-                self.pos += 2;
-                self.consume_inline_whitespace();
-            } else if self.peek_char() == Some('.') || self.at_statement_end() {
-                break;
+                if self.peek_char() == Some(',') {
+                    self.token(SyntaxKind::Comma, ",");
+                    self.pos += 1;
+                    self.consume_inline_whitespace();
+                } else if self.peek_char() == Some(';') {
+                    self.token(SyntaxKind::Semicolon, ";");
+                    self.pos += 1;
+                    self.consume_inline_whitespace();
+                } else if self.starts_with("::") {
+                    self.token(SyntaxKind::ColonColon, "::");
+                    self.pos += 2;
+                    self.consume_inline_whitespace();
+                } else if self.peek_char() == Some('.') || self.at_statement_end() {
+                    break;
+                }
             }
         }
 
@@ -428,16 +481,13 @@ impl<'a> RegionParser<'a> {
     }
 
     fn parse_subject_like(&mut self) -> bool {
-        if self.peek_char() == Some('<')
-            && self
-                .peek_next_char()
-                .is_some_and(|ch| ch == '>' || ch.is_whitespace())
-        {
-            self.parse_local_subject_marker();
-            self.consume_inline_whitespace();
-            true
-        } else {
-            self.parse_value()
+        match local_subject_marker_at(self.source, self.pos) {
+            LocalSubjectMarkerMatch::Valid(_) | LocalSubjectMarkerMatch::Invalid(_) => {
+                self.parse_local_subject_marker();
+                self.consume_inline_whitespace();
+                true
+            }
+            LocalSubjectMarkerMatch::None => self.parse_value(),
         }
     }
 
@@ -456,6 +506,10 @@ impl<'a> RegionParser<'a> {
         while !self.at_statement_end() {
             if matches!(self.peek_char(), Some(',') | Some(';') | Some('.'))
                 || self.starts_with("::")
+                || matches!(
+                    local_subject_marker_at(self.source, self.pos),
+                    LocalSubjectMarkerMatch::Valid(_) | LocalSubjectMarkerMatch::Invalid(_)
+                )
             {
                 break;
             }
@@ -479,6 +533,14 @@ impl<'a> RegionParser<'a> {
     }
 
     fn parse_value(&mut self) -> bool {
+        match local_subject_marker_at(self.source, self.pos) {
+            LocalSubjectMarkerMatch::Valid(_) | LocalSubjectMarkerMatch::Invalid(_) => {
+                self.parse_local_subject_marker();
+                return true;
+            }
+            LocalSubjectMarkerMatch::None => {}
+        }
+
         match self.peek_char() {
             Some('[') => {
                 self.parse_snippet();
@@ -493,14 +555,7 @@ impl<'a> RegionParser<'a> {
                 true
             }
             Some('<') => {
-                if self
-                    .peek_next_char()
-                    .is_some_and(|ch| ch == '>' || ch.is_whitespace())
-                {
-                    self.parse_local_subject_marker();
-                } else {
-                    self.parse_uri();
-                }
+                self.parse_uri();
                 true
             }
             Some('`') => {
@@ -637,6 +692,11 @@ impl<'a> RegionParser<'a> {
             if ch == '"' {
                 break;
             }
+            if ch == '\\' {
+                self.advance_char();
+                self.advance_char();
+                continue;
+            }
             self.advance_char();
         }
         if self.pos > content_start {
@@ -716,15 +776,34 @@ impl<'a> RegionParser<'a> {
     }
 
     fn parse_local_subject_marker(&mut self) {
+        let marker = local_subject_marker_at(self.source, self.pos);
+        let (len, invalid) = match marker {
+            LocalSubjectMarkerMatch::Valid(len) => (len, false),
+            LocalSubjectMarkerMatch::Invalid(len) => (len, true),
+            LocalSubjectMarkerMatch::None => return,
+        };
+        let start = self.pos;
+        let end = start + len;
         self.events
             .push(Event::Start(SyntaxKind::LocalSubjectMarker));
-        self.token(SyntaxKind::LAngle, "<");
-        self.pos += 1;
-        if self.peek_char() == Some('>') {
-            self.token(SyntaxKind::RAngle, ">");
-            self.pos += 1;
+        while self.pos < end {
+            match self.peek_char() {
+                Some('~') => self.token(SyntaxKind::Tilde, "~"),
+                Some('<') => self.token(SyntaxKind::LAngle, "<"),
+                Some('>') => self.token(SyntaxKind::RAngle, ">"),
+                _ => break,
+            }
+            self.advance_char();
         }
         self.events.push(Event::Finish);
+        if invalid {
+            self.push_diagnostic(
+                DiagnosticCode::InvalidLocalSubjectMarker,
+                "Invalid local subject marker",
+                start,
+                end,
+            );
+        }
     }
 
     fn parse_backtick_chunk(&mut self) {
@@ -821,12 +900,6 @@ impl<'a> RegionParser<'a> {
         self.source[self.pos..].chars().next()
     }
 
-    fn peek_next_char(&self) -> Option<char> {
-        let mut chars = self.source[self.pos..].chars();
-        chars.next()?;
-        chars.next()
-    }
-
     fn starts_with(&self, pattern: &str) -> bool {
         self.source[self.pos..].starts_with(pattern)
     }
@@ -878,9 +951,21 @@ fn replay_without_root(events: &[Event], out: &mut Vec<Event>) {
     let mut depth = 0usize;
     for event in events {
         match event {
-            Event::Start(SyntaxKind::Root) if depth == 0 => depth += 1,
-            Event::Finish if depth == 1 => depth -= 1,
-            _ => out.push(event.clone()),
+            Event::Start(SyntaxKind::Root) if depth == 0 => {
+                depth = 1;
+            }
+            Event::Start(_) => {
+                depth += 1;
+                out.push(event.clone());
+            }
+            Event::Finish if depth == 1 => {
+                depth = 0;
+            }
+            Event::Finish => {
+                depth = depth.saturating_sub(1);
+                out.push(event.clone());
+            }
+            Event::Token(_, _) => out.push(event.clone()),
         }
     }
 }
@@ -912,12 +997,34 @@ fn find_line_end(source: &str, from: usize) -> usize {
         .map_or(source.len(), |idx| from + idx)
 }
 
+fn line_content_end(source: &str, line_end: usize) -> usize {
+    if line_end < source.len() && source[..line_end].ends_with('\r') {
+        line_end - 1
+    } else {
+        line_end
+    }
+}
+
 fn next_line_start(source: &str, line_end: usize) -> usize {
     if line_end < source.len() {
         line_end + 1
     } else {
         line_end
     }
+}
+
+fn marginalia_slash_marker(source: &str, line_start: usize) -> Option<usize> {
+    if !is_line_start(source, line_start) {
+        return None;
+    }
+
+    let line_end = find_line_end(source, line_start);
+    let content_end = line_content_end(source, line_end);
+    let indentation = leading_ws_len(&source[line_start..content_end]);
+    let marker_start = line_start + indentation;
+    source[marker_start..content_end]
+        .starts_with("///")
+        .then_some(marker_start)
 }
 
 fn is_line_start(source: &str, pos: usize) -> bool {
@@ -940,7 +1047,8 @@ fn find_next_marginalia_region(source: &str, from: usize) -> usize {
     let mut cursor = from;
     while cursor < source.len() {
         if is_line_start(source, cursor)
-            && (source[cursor..].starts_with("///") || source[cursor..].starts_with("```"))
+            && (marginalia_slash_marker(source, cursor).is_some()
+                || source[cursor..].starts_with("```"))
         {
             return cursor;
         }
@@ -950,10 +1058,95 @@ fn find_next_marginalia_region(source: &str, from: usize) -> usize {
     source.len()
 }
 
+fn find_intralinea_close(source: &str, from: usize) -> Option<usize> {
+    let mut cursor = from;
+    let mut capture_depth = 0usize;
+    let mut quote: Option<&'static str> = None;
+
+    while cursor < source.len() {
+        let tail = &source[cursor..];
+        if let Some(delimiter) = quote {
+            if delimiter == "\"" && tail.starts_with('\\') {
+                cursor += 1;
+                if cursor < source.len() {
+                    cursor += source[cursor..].chars().next()?.len_utf8();
+                }
+            } else if delimiter == "\"\"\"" && tail.starts_with("\"\"\"") {
+                quote = None;
+                cursor += 3;
+            } else if tail.starts_with(delimiter) {
+                quote = None;
+                cursor += delimiter.len();
+            } else {
+                cursor += tail.chars().next()?.len_utf8();
+            }
+            continue;
+        }
+
+        if tail.starts_with("\"\"\"") {
+            quote = Some("\"\"\"");
+            cursor += 3;
+        } else if tail.starts_with('"') {
+            quote = Some("\"");
+            cursor += 1;
+        } else if tail.starts_with('`') {
+            quote = Some("`");
+            cursor += 1;
+        } else if tail.starts_with('{') {
+            capture_depth += 1;
+            cursor += 1;
+        } else if tail.starts_with('}') && capture_depth > 0 {
+            capture_depth -= 1;
+            cursor += 1;
+        } else if tail.starts_with("}}") {
+            return Some(cursor);
+        } else {
+            cursor += tail.chars().next()?.len_utf8();
+        }
+    }
+
+    None
+}
+
 fn leading_ws_len(text: &str) -> usize {
     text.char_indices()
         .find_map(|(idx, ch)| (!ch.is_whitespace()).then_some(idx))
         .unwrap_or(text.len())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LocalSubjectMarkerMatch {
+    None,
+    Valid(usize),
+    Invalid(usize),
+}
+
+fn local_subject_marker_at(source: &str, pos: usize) -> LocalSubjectMarkerMatch {
+    let tail = &source[pos..];
+    let marker_start = usize::from(tail.starts_with('~'));
+    let marker_tail = &tail[marker_start..];
+    let angle_len = marker_tail
+        .char_indices()
+        .find_map(|(index, ch)| (!matches!(ch, '<' | '>')).then_some(index))
+        .unwrap_or(marker_tail.len());
+
+    if angle_len == 0 {
+        return LocalSubjectMarkerMatch::None;
+    }
+
+    let marker_len = marker_start + angle_len;
+    if tail[marker_len..]
+        .chars()
+        .next()
+        .is_some_and(|ch| !ch.is_whitespace())
+    {
+        return LocalSubjectMarkerMatch::None;
+    }
+
+    match &marker_tail[..angle_len] {
+        "<" | ">" | "<>" | "<<" | ">>" | "<<>>" => LocalSubjectMarkerMatch::Valid(marker_len),
+        _ => LocalSubjectMarkerMatch::Invalid(marker_len),
+    }
 }
 
 fn is_identifier_start(ch: char) -> bool {

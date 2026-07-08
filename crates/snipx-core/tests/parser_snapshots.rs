@@ -1,4 +1,4 @@
-use snipx_core::{parse, DiagnosticCode, InputForm, ParseOptions};
+use snipx_core::{parse, DiagnosticCode, InputForm, ParseOptions, SyntaxKind};
 
 #[test]
 fn parses_basic_commentaria_without_errors() {
@@ -172,4 +172,230 @@ fn malformed_intralinea_block_recovers() {
         parsed.diagnostics()[0].code,
         DiagnosticCode::UnterminatedIntralineaBlock
     );
+}
+
+#[test]
+fn embedded_statements_preserve_sibling_and_nesting_structure() {
+    for (src, input_form, container_kind) in [
+        (
+            "```\nAlice friend Bob.\n```\n",
+            InputForm::Marginalia,
+            SyntaxKind::Fence,
+        ),
+        (
+            "{{Alice friend Bob.}}",
+            InputForm::Intralinea,
+            SyntaxKind::IntralineaBlock,
+        ),
+    ] {
+        let parsed = parse(src, ParseOptions { input_form });
+        let container = parsed
+            .syntax()
+            .descendants()
+            .find(|node| node.kind() == container_kind)
+            .expect("embedded container");
+        let statement = container
+            .children()
+            .find(|node| node.kind() == SyntaxKind::Statement)
+            .expect("statement is a direct child of its container");
+        let child_kinds: Vec<_> = statement.children().map(|node| node.kind()).collect();
+
+        assert_eq!(
+            child_kinds,
+            [
+                SyntaxKind::Subject,
+                SyntaxKind::Predicate,
+                SyntaxKind::ObjectList
+            ]
+        );
+        assert_eq!(parsed.syntax().to_string(), src);
+    }
+}
+
+#[test]
+fn semicolon_carry_forward_across_newline_is_one_statement_chain() {
+    let src = "Alice a Character;\n  friend Bob.\n";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+
+    assert!(parsed.diagnostics().is_empty());
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert_eq!(
+        parsed
+            .syntax()
+            .descendants()
+            .filter(|node| node.kind() == SyntaxKind::Statement)
+            .count(),
+        1
+    );
+    assert_eq!(
+        parsed
+            .syntax()
+            .descendants()
+            .filter(|node| node.kind() == SyntaxKind::Subject)
+            .count(),
+        1
+    );
+    assert_eq!(
+        parsed
+            .syntax()
+            .descendants()
+            .filter(|node| node.kind() == SyntaxKind::Predicate)
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn intralinea_closing_ignores_strings_and_capture_closes() {
+    for src in [r#"{{ note "a }} b". }}"#, "{{{Alice}}}"] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Intralinea,
+            },
+        );
+
+        assert!(parsed.diagnostics().is_empty(), "{src:?}");
+        assert_eq!(parsed.syntax().to_string(), src);
+        assert_eq!(
+            parsed
+                .syntax()
+                .descendants()
+                .filter(|node| node.kind() == SyntaxKind::IntralineaBlock)
+                .count(),
+            1
+        );
+    }
+}
+
+#[test]
+fn recognises_all_local_subject_markers() {
+    let cases = [
+        "{{< p O. }}",
+        "{{p O >}}",
+        "{{<> p O. }}",
+        "{{<< p O. }}",
+        "{{p O >>}}",
+        "{{<<>> p O. }}",
+        "{{~< p O. }}",
+        "{{p O ~>}}",
+        "{{~<> p O. }}",
+        "{{~<< p O. }}",
+        "{{p O ~>>}}",
+        "{{~<<>> p O. }}",
+    ];
+
+    for src in cases {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Intralinea,
+            },
+        );
+
+        assert!(parsed.diagnostics().is_empty(), "{src:?}");
+        assert_eq!(parsed.syntax().to_string(), src);
+        assert_eq!(
+            parsed
+                .syntax()
+                .descendants()
+                .filter(|node| node.kind() == SyntaxKind::LocalSubjectMarker)
+                .count(),
+            1,
+            "{src:?}"
+        );
+    }
+}
+
+#[test]
+fn diagnoses_malformed_local_subject_markers() {
+    for src in ["{{<<< p O. }}", "{{<>> p O. }}", "{{~>>> p O. }}"] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Intralinea,
+            },
+        );
+
+        assert_eq!(parsed.syntax().to_string(), src);
+        assert!(
+            parsed
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagnosticCode::InvalidLocalSubjectMarker),
+            "{src:?}"
+        );
+    }
+}
+
+#[test]
+fn marginalia_fences_preserve_spacing_suffixes_and_crlf() {
+    let src = concat!(
+        "``` snipx \t\r\n",
+        "Alice friend Bob.  \r\n",
+        "``` trailing \t\r\n",
+        "``` js \r\n",
+        "const value = 1;\r\n",
+        "``` ignored\r\n",
+    );
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Marginalia,
+        },
+    );
+
+    assert!(parsed.diagnostics().is_empty());
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert_eq!(
+        parsed
+            .syntax()
+            .descendants()
+            .filter(|node| node.kind() == SyntaxKind::Statement)
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn indented_marginalia_slash_marker_is_lossless() {
+    let src = " \t///   Alice friend Bob.\r\n";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Marginalia,
+        },
+    );
+
+    assert!(parsed.diagnostics().is_empty());
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert!(parsed
+        .syntax()
+        .descendants()
+        .any(|node| node.kind() == SyntaxKind::Statement));
+}
+
+#[test]
+fn ordinary_strings_honour_escaped_quotes_and_backslashes() {
+    let src = r#"Alice note "a \"quote\" and \\ path"."#;
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    let string = parsed
+        .syntax()
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::String)
+        .expect("string");
+
+    assert!(parsed.diagnostics().is_empty());
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert_eq!(string.to_string(), r#""a \"quote\" and \\ path""#);
 }

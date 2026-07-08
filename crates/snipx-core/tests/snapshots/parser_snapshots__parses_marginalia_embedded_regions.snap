@@ -1,6 +1,5 @@
 ---
 source: crates/snipx-core/tests/parser_snapshots.rs
-assertion_line: 78
 expression: parsed.debug_tree()
 ---
 ROOT
@@ -14,19 +13,19 @@ ROOT
           L_BRACK "["
           TEXT "Alice"
           R_BRACK "]"
-        WHITESPACE " "
-        PREDICATE
-          IDENT
-            TEXT "mood"
-        WHITESPACE " "
-        OBJECT_LIST
-          OBJECT
-            STRING
-              QUOTE "\""
-              TEXT "guarded"
-              QUOTE "\""
-        DOT "."
-      WHITESPACE "\n"
+      WHITESPACE " "
+      PREDICATE
+        IDENT
+          TEXT "mood"
+      WHITESPACE " "
+      OBJECT_LIST
+        OBJECT
+          STRING
+            QUOTE "\""
+            TEXT "guarded"
+            QUOTE "\""
+      DOT "."
+    WHITESPACE "\n"
     BACKTICK "```"
     WHITESPACE "\n"
   MARGINALIA_TEXT "\n"
@@ -39,16 +38,16 @@ ROOT
           L_BRACK "["
           TEXT "door"
           R_BRACK "]"
-        WHITESPACE " "
-        PREDICATE
+      WHITESPACE " "
+      PREDICATE
+        IDENT
+          TEXT "motif"
+      WHITESPACE " "
+      OBJECT_LIST
+        OBJECT
           IDENT
-            TEXT "motif"
-        WHITESPACE " "
-        OBJECT_LIST
-          OBJECT
-            IDENT
-              TEXT "Threshold"
-        DOT "."
+            TEXT "Threshold"
+      DOT "."
   WHITESPACE "\n"
   MARGINALIA_TEXT "\n"
   FENCE
