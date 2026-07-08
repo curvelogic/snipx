@@ -4,3 +4,9 @@
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+# Local Superpowers/subagent handoff artifacts
+.superpowers/
+
+# Rust build output
+target/
