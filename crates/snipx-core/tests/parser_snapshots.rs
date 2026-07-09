@@ -1052,6 +1052,39 @@ fn unterminated_uri_and_snippet_still_allow_intralinea_close() {
 }
 
 #[test]
+fn unterminated_quoted_snippet_still_allows_intralinea_close() {
+    let src = "Before {{[\"unterminated\n}} After";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Intralinea,
+        },
+    );
+    let trailing_text = parsed
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|element| element.into_token())
+        .filter(|token| token.kind() == SyntaxKind::IntralineaText)
+        .last()
+        .expect("trailing host text");
+
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert!(parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedString));
+    assert!(parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedSnippet));
+    assert!(!parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedIntralineaBlock));
+    assert_eq!(trailing_text.text(), " After");
+}
+
+#[test]
 fn ambient_statements_have_predicate_and_object_boundaries_without_subjects() {
     for (src, input_form) in [
         ("/// hair \"red\".\n", InputForm::Marginalia),

@@ -1589,7 +1589,7 @@ fn intralinea_snippet_len(source: &str) -> Option<usize> {
                 escaped = false;
             } else if ch == '\\' {
                 escaped = true;
-            } else if ch == '"' {
+            } else if matches!(ch, '\n' | '\r' | '"') {
                 quoted = false;
             }
         } else {
