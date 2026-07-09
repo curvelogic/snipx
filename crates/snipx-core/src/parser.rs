@@ -257,6 +257,16 @@ fn parse_snipx_region(source: &str, offset: usize, context: RegionContext) -> Re
     }
 }
 
+fn parse_inline_value_region(source: &str, offset: usize, context: RegionContext) -> RegionParse {
+    let mut parser = RegionParser::new(source, offset, context);
+    parser.parse_inline_value_until(source.len());
+    parser.events.push(Event::Finish);
+    RegionParse {
+        events: parser.events,
+        diagnostics: parser.diagnostics,
+    }
+}
+
 struct RegionParser<'a> {
     source: &'a str,
     offset: usize,
@@ -411,7 +421,14 @@ impl<'a> RegionParser<'a> {
             let ws_end = self.pos + leading_ws_len(&self.source[self.pos..content_end]);
             self.pos = ws_end;
             if self.pos < content_end {
-                self.parse_inline_value_until(content_end);
+                let value_start = self.pos;
+                let region = parse_inline_value_region(
+                    &self.source[value_start..content_end],
+                    self.offset + value_start,
+                    self.context,
+                );
+                replay_without_root(&region.events, &mut self.events);
+                self.diagnostics.extend(region.diagnostics);
             }
         }
         self.events.push(Event::Finish);
@@ -688,8 +705,30 @@ impl<'a> RegionParser<'a> {
                 has_value: true,
                 has_error: false,
             }
+        } else if self.peek_char() == Some('=') {
+            self.token(SyntaxKind::Text, "=");
+            self.pos += 1;
+            ValueParseState {
+                has_value: true,
+                has_error: false,
+            }
+        } else if self.peek_char().is_some_and(is_identifier_start) {
+            self.parse_predicate_identifier();
+            ValueParseState {
+                has_value: true,
+                has_error: false,
+            }
         } else {
-            self.parse_statement_value(true)
+            self.events.push(Event::Start(SyntaxKind::Error));
+            let invalid = self.parse_statement_value(false);
+            if !invalid.has_value && !invalid.has_error {
+                self.push_empty_error();
+            }
+            self.events.push(Event::Finish);
+            ValueParseState {
+                has_value: false,
+                has_error: true,
+            }
         }
     }
 
@@ -725,7 +764,9 @@ impl<'a> RegionParser<'a> {
                 }
                 self.token_from(SyntaxKind::Whitespace, start, self.pos);
             } else if !self.parse_value() {
-                break;
+                let start = self.pos;
+                self.advance_char();
+                self.token_from(SyntaxKind::Text, start, self.pos);
             }
         }
     }
@@ -1136,7 +1177,7 @@ impl<'a> RegionParser<'a> {
         self.pos += 1;
         let content_start = self.pos;
         while let Some(ch) = self.peek_char() {
-            if ch == '`' {
+            if ch == '`' || matches!(ch, '\n' | '\r') {
                 break;
             }
             self.advance_char();
@@ -1184,6 +1225,14 @@ impl<'a> RegionParser<'a> {
             SyntaxKind::Identifier
         };
         self.events.push(Event::Start(kind));
+        self.token_from(SyntaxKind::Text, start, self.pos);
+        self.events.push(Event::Finish);
+    }
+
+    fn parse_predicate_identifier(&mut self) {
+        let start = self.pos;
+        self.consume_while(is_identifier_continue);
+        self.events.push(Event::Start(SyntaxKind::Identifier));
         self.token_from(SyntaxKind::Text, start, self.pos);
         self.events.push(Event::Finish);
     }
@@ -1435,6 +1484,16 @@ fn find_intralinea_close(source: &str, from: usize) -> Option<usize> {
                         }
                     }
                 } else if ch == '"' {
+                    quote = None;
+                    cursor += 1;
+                } else {
+                    cursor += ch.len_utf8();
+                }
+            } else if delimiter == "`" {
+                let ch = tail.chars().next()?;
+                if matches!(ch, '\n' | '\r') {
+                    quote = None;
+                } else if ch == '`' {
                     quote = None;
                     cursor += 1;
                 } else {

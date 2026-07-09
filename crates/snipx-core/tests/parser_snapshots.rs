@@ -1122,3 +1122,103 @@ fn predicate_synonym_with_punctuation_remains_valid() {
         .descendants()
         .any(|node| node.kind() == SyntaxKind::Error));
 }
+
+#[test]
+fn directive_inline_values_do_not_duplicate_following_source() {
+    for src in [
+        "@custom [doc\nAlice friend Bob.\n",
+        "@custom {doc\nAlice friend Bob.\n",
+        "@custom `doc\nAlice friend Bob.\n",
+        "@custom \"\"\"doc\nAlice friend Bob.\n",
+    ] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Commentaria,
+            },
+        );
+        let rendered = parsed.syntax().to_string();
+
+        assert_eq!(rendered, src, "{src:?}");
+        assert_eq!(
+            rendered.match_indices("Alice friend Bob.\n").count(),
+            1,
+            "{src:?}"
+        );
+        assert!(!parsed.diagnostics().is_empty(), "{src:?}");
+    }
+}
+
+#[test]
+fn non_identifier_predicates_recover_as_errors() {
+    for src in [r#"Alice "not a predicate" Bob."#, "Alice [Bob] Carol."] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Commentaria,
+            },
+        );
+        let statement = parsed
+            .syntax()
+            .children()
+            .find(|node| node.kind() == SyntaxKind::Statement)
+            .expect("statement");
+        let predicate = statement
+            .children()
+            .find(|node| node.kind() == SyntaxKind::Predicate)
+            .expect("predicate");
+        let object_list = statement
+            .children()
+            .find(|node| node.kind() == SyntaxKind::ObjectList)
+            .expect("object list");
+
+        assert_eq!(parsed.syntax().to_string(), src, "{src:?}");
+        assert!(
+            parsed
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagnosticCode::ParseError),
+            "{src:?}"
+        );
+        assert!(
+            predicate
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::Error),
+            "{src:?}"
+        );
+        assert!(
+            object_list
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::Identifier),
+            "{src:?}"
+        );
+    }
+}
+
+#[test]
+fn unterminated_backtick_predicate_still_allows_intralinea_close() {
+    let src = "Before {{Alice `unterminated\nBob friend Dana.}} After";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Intralinea,
+        },
+    );
+    let trailing_text = parsed
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|element| element.into_token())
+        .filter(|token| token.kind() == SyntaxKind::IntralineaText)
+        .last()
+        .expect("trailing host text");
+
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert!(parsed.diagnostics().iter().any(|diagnostic| {
+        diagnostic.code == DiagnosticCode::ParseError && diagnostic.message.contains("backtick")
+    }));
+    assert!(!parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedIntralineaBlock));
+    assert_eq!(trailing_text.text(), " After");
+}
