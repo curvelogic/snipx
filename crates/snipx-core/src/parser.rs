@@ -280,6 +280,12 @@ struct ObjectListState {
     has_error: bool,
 }
 
+#[derive(Debug, Default, Clone, Copy)]
+struct ValueParseState {
+    has_value: bool,
+    has_error: bool,
+}
+
 impl<'a> RegionParser<'a> {
     fn new(source: &'a str, offset: usize, context: RegionContext) -> Self {
         Self {
@@ -389,26 +395,27 @@ impl<'a> RegionParser<'a> {
             );
         }
 
-        let end = find_line_end(self.source, self.pos);
+        let line_end = find_line_end(self.source, self.pos);
+        let content_end = line_content_end(self.source, line_end);
         self.events.push(Event::Start(kind));
         self.token(SyntaxKind::At, "@");
         self.pos += 1;
         self.consume_identifier_like();
         self.token_from(SyntaxKind::Identifier, start + 1, self.pos);
-        if self.pos < end {
+        if self.pos < content_end {
             self.token_from(
                 SyntaxKind::Whitespace,
                 self.pos,
-                self.pos + leading_ws_len(&self.source[self.pos..end]),
+                self.pos + leading_ws_len(&self.source[self.pos..content_end]),
             );
-            let ws_end = self.pos + leading_ws_len(&self.source[self.pos..end]);
+            let ws_end = self.pos + leading_ws_len(&self.source[self.pos..content_end]);
             self.pos = ws_end;
-            if self.pos < end {
-                self.parse_inline_value_until(end);
+            if self.pos < content_end {
+                self.parse_inline_value_until(content_end);
             }
         }
         self.events.push(Event::Finish);
-        self.pos = end;
+        self.pos = content_end;
     }
 
     fn parse_decoration(&mut self) {
@@ -451,8 +458,17 @@ impl<'a> RegionParser<'a> {
         } else {
             self.events.push(Event::Start(SyntaxKind::Subject));
             let subject_start = self.pos;
-            if self.parse_subject_like() {
+            let subject_state = self.parse_subject_like();
+            if subject_state.has_value {
                 has_subject = true;
+            } else if subject_state.has_error {
+                self.push_diagnostic(
+                    DiagnosticCode::ParseError,
+                    "Expected subject",
+                    subject_start,
+                    self.pos,
+                );
+                has_error = true;
             } else {
                 self.push_empty_error();
                 self.push_diagnostic(
@@ -527,8 +543,18 @@ impl<'a> RegionParser<'a> {
         while !self.at_statement_end() && self.peek_char() != Some('.') {
             let predicate_start = self.pos;
             self.events.push(Event::Start(SyntaxKind::Predicate));
-            if self.parse_predicate_like() {
+            let predicate = self.parse_predicate_like();
+            if predicate.has_value {
                 state.has_predicate = true;
+            }
+            if predicate.has_error {
+                self.push_diagnostic(
+                    DiagnosticCode::ParseError,
+                    "Expected predicate",
+                    predicate_start,
+                    self.pos,
+                );
+                state.has_error = true;
             }
             self.events.push(Event::Finish);
 
@@ -578,15 +604,26 @@ impl<'a> RegionParser<'a> {
         loop {
             self.events.push(Event::Start(SyntaxKind::Object));
             let object_start = self.pos;
-            if self.parse_object_like() {
+            let object = self.parse_object_like();
+            if object.has_value {
                 state.has_object = true;
-            } else {
-                self.push_empty_error();
+            }
+            if object.has_error {
+                state.has_error = true;
+            }
+            if !object.has_value {
+                if !object.has_error {
+                    self.push_empty_error();
+                }
                 self.push_diagnostic(
                     DiagnosticCode::ParseError,
                     "Expected object",
                     object_start,
-                    object_start,
+                    if object.has_error {
+                        self.pos
+                    } else {
+                        object_start
+                    },
                 );
                 state.has_error = true;
             }
@@ -619,31 +656,45 @@ impl<'a> RegionParser<'a> {
         PredicateChainState::default()
     }
 
-    fn parse_subject_like(&mut self) -> bool {
+    fn parse_subject_like(&mut self) -> ValueParseState {
         match local_subject_marker_at(self.source, self.pos) {
+            LocalSubjectMarkerMatch::Valid(_) if self.context == RegionContext::Intralinea => {
+                self.parse_local_subject_marker();
+                self.consume_inline_whitespace();
+                ValueParseState {
+                    has_value: true,
+                    has_error: false,
+                }
+            }
             LocalSubjectMarkerMatch::Valid(_) | LocalSubjectMarkerMatch::Invalid(_) => {
                 self.parse_local_subject_marker();
                 self.consume_inline_whitespace();
-                true
+                ValueParseState {
+                    has_value: false,
+                    has_error: true,
+                }
             }
-            LocalSubjectMarkerMatch::None => self.parse_value(),
+            LocalSubjectMarkerMatch::None => self.parse_statement_value(false),
         }
     }
 
-    fn parse_predicate_like(&mut self) -> bool {
+    fn parse_predicate_like(&mut self) -> ValueParseState {
         if self.peek_char() == Some('`') {
             self.events
                 .push(Event::Start(SyntaxKind::BacktickPredicate));
             self.parse_backtick_chunk();
             self.events.push(Event::Finish);
-            true
+            ValueParseState {
+                has_value: true,
+                has_error: false,
+            }
         } else {
-            self.parse_value()
+            self.parse_statement_value(true)
         }
     }
 
-    fn parse_object_like(&mut self) -> bool {
-        let mut parsed_any = false;
+    fn parse_object_like(&mut self) -> ValueParseState {
+        let mut state = ValueParseState::default();
         while !self.at_statement_end() {
             if matches!(self.peek_char(), Some(',') | Some(';') | Some('.'))
                 || self.starts_with("::")
@@ -654,23 +705,113 @@ impl<'a> RegionParser<'a> {
             {
                 break;
             }
-            if !self.parse_value() {
+            let value = self.parse_statement_value(false);
+            if !value.has_value && !value.has_error {
                 break;
             }
-            parsed_any = true;
+            state.has_value |= value.has_value;
+            state.has_error |= value.has_error;
             self.consume_inline_whitespace();
         }
-        parsed_any
+        state
     }
 
     fn parse_inline_value_until(&mut self, end: usize) {
         while self.pos < end {
             if self.peek_char().is_some_and(char::is_whitespace) {
                 let start = self.pos;
-                self.consume_while(|ch| ch.is_whitespace());
+                while self.pos < end && self.peek_char().is_some_and(char::is_whitespace) {
+                    self.advance_char();
+                }
                 self.token_from(SyntaxKind::Whitespace, start, self.pos);
             } else if !self.parse_value() {
                 break;
+            }
+        }
+    }
+
+    fn parse_statement_value(&mut self, allow_equals: bool) -> ValueParseState {
+        match self.peek_char() {
+            Some('[') => {
+                self.parse_snippet();
+                ValueParseState {
+                    has_value: true,
+                    has_error: false,
+                }
+            }
+            Some('{') => {
+                self.parse_capture();
+                ValueParseState {
+                    has_value: true,
+                    has_error: false,
+                }
+            }
+            Some('"') => {
+                self.parse_string();
+                ValueParseState {
+                    has_value: true,
+                    has_error: false,
+                }
+            }
+            Some('<') => {
+                self.parse_uri();
+                ValueParseState {
+                    has_value: true,
+                    has_error: false,
+                }
+            }
+            Some('`') => {
+                self.parse_backtick_chunk();
+                ValueParseState {
+                    has_value: true,
+                    has_error: false,
+                }
+            }
+            Some('~') if self.source[self.pos..].starts_with("~[") => {
+                self.token(SyntaxKind::Tilde, "~");
+                self.pos += 1;
+                self.parse_snippet();
+                ValueParseState {
+                    has_value: true,
+                    has_error: false,
+                }
+            }
+            Some('+') | Some('*') | Some('?') => {
+                self.parse_invalid_statement_value();
+                ValueParseState {
+                    has_value: false,
+                    has_error: true,
+                }
+            }
+            Some(ch) if ch.is_ascii_digit() => {
+                self.parse_number();
+                ValueParseState {
+                    has_value: true,
+                    has_error: false,
+                }
+            }
+            Some(ch) if is_identifier_start(ch) => {
+                self.parse_identifier_like();
+                ValueParseState {
+                    has_value: true,
+                    has_error: false,
+                }
+            }
+            Some('=') if allow_equals => {
+                self.token(SyntaxKind::Text, "=");
+                self.pos += 1;
+                ValueParseState {
+                    has_value: true,
+                    has_error: false,
+                }
+            }
+            Some('.') | Some(',') | Some(';') | None => ValueParseState::default(),
+            Some(_) => {
+                self.parse_invalid_statement_value();
+                ValueParseState {
+                    has_value: false,
+                    has_error: true,
+                }
             }
         }
     }
@@ -737,6 +878,26 @@ impl<'a> RegionParser<'a> {
             }
             None => false,
         }
+    }
+
+    fn parse_invalid_statement_value(&mut self) {
+        self.events.push(Event::Start(SyntaxKind::Error));
+        match self.peek_char() {
+            Some('+') | Some('*') | Some('?') => {
+                let quantifier = self.peek_char().expect("quantifier was matched");
+                self.events.push(Event::Start(SyntaxKind::Quantifier));
+                self.token(SyntaxKind::Text, &quantifier.to_string());
+                self.pos += quantifier.len_utf8();
+                self.events.push(Event::Finish);
+            }
+            Some(_) => {
+                let start = self.pos;
+                self.advance_char();
+                self.token_from(SyntaxKind::Text, start, self.pos);
+            }
+            None => {}
+        }
+        self.events.push(Event::Finish);
     }
 
     fn parse_snippet(&mut self) {
@@ -1337,7 +1498,12 @@ fn intralinea_snippet_len(source: &str) -> Option<usize> {
     let mut escaped = false;
 
     while cursor < source.len() {
-        let ch = source[cursor..].chars().next()?;
+        let tail = &source[cursor..];
+        if !quoted && capture_depth == 0 && tail.starts_with("}}") {
+            return Some(cursor);
+        }
+
+        let ch = tail.chars().next()?;
         if quoted {
             if escaped {
                 escaped = false;
@@ -1358,7 +1524,7 @@ fn intralinea_snippet_len(source: &str) -> Option<usize> {
         cursor += ch.len_utf8();
     }
 
-    None
+    Some(source.len())
 }
 
 fn intralinea_uri_literal_len(source: &str) -> Option<usize> {
@@ -1374,15 +1540,18 @@ fn intralinea_uri_literal_len(source: &str) -> Option<usize> {
     }
 
     for (idx, ch) in chars {
+        if source[idx..].starts_with("}}") {
+            return Some(idx);
+        }
         if ch == '>' {
             return Some(idx + 1);
         }
         if ch.is_whitespace() {
-            return None;
+            return Some(idx);
         }
     }
 
-    None
+    Some(source.len())
 }
 
 fn leading_ws_len(text: &str) -> usize {

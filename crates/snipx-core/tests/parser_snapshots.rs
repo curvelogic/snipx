@@ -145,6 +145,40 @@ fn marginalia_slash_marker_is_lossless_without_space() {
 }
 
 #[test]
+fn directives_preserve_trailing_horizontal_whitespace_before_line_endings() {
+    let src = "@target <doc.txt>  \n@profile loose\t\r\n[Alice] a Character.\n";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    let directives: Vec<_> = parsed
+        .syntax()
+        .children()
+        .filter(|node| {
+            matches!(
+                node.kind(),
+                SyntaxKind::TargetDirective | SyntaxKind::ProfileDirective
+            )
+        })
+        .map(|node| node.to_string())
+        .collect();
+    let whitespace: Vec<_> = parsed
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|element| element.into_token())
+        .filter(|token| token.kind() == SyntaxKind::Whitespace)
+        .map(|token| token.text().to_string())
+        .collect();
+
+    assert!(parsed.diagnostics().is_empty());
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert_eq!(directives, ["@target <doc.txt>  ", "@profile loose\t"]);
+    assert_eq!(whitespace, ["\n", "\r\n", "\n"]);
+}
+
+#[test]
 fn malformed_snippet_recovers() {
     let parsed = parse(
         "[Alice a Character.",
@@ -926,6 +960,55 @@ fn intralinea_closing_ignores_uri_and_snippet_text_comment_markers() {
 }
 
 #[test]
+fn unterminated_uri_and_snippet_still_allow_intralinea_close() {
+    for (src, diagnostic_code, opener) in [
+        (
+            "Before {{<https://example.test}} After",
+            DiagnosticCode::ParseError,
+            "<",
+        ),
+        (
+            "Before {{[https://example.test}} After",
+            DiagnosticCode::UnterminatedSnippet,
+            "[",
+        ),
+    ] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Intralinea,
+            },
+        );
+        let diagnostic = parsed
+            .diagnostics()
+            .iter()
+            .find(|diagnostic| diagnostic.code == diagnostic_code)
+            .expect("expected unterminated diagnostic");
+        let trailing_text = parsed
+            .syntax()
+            .children_with_tokens()
+            .filter_map(|element| element.into_token())
+            .filter(|token| token.kind() == SyntaxKind::IntralineaText)
+            .last()
+            .expect("trailing host text");
+        let start = src.find(opener).expect("unterminated opener");
+        let end = src.find("}}").expect("intralinea close");
+
+        assert_eq!(parsed.syntax().to_string(), src);
+        assert!(
+            !parsed
+                .diagnostics()
+                .iter()
+                .any(|item| item.code == DiagnosticCode::UnterminatedIntralineaBlock),
+            "{src:?}"
+        );
+        assert_eq!(trailing_text.text(), " After", "{src:?}");
+        assert_eq!(diagnostic.span.as_ref().map(|span| span.start), Some(start));
+        assert_eq!(diagnostic.span.as_ref().map(|span| span.end), Some(end));
+    }
+}
+
+#[test]
 fn ambient_statements_have_predicate_and_object_boundaries_without_subjects() {
     for (src, input_form) in [
         ("/// hair \"red\".\n", InputForm::Marginalia),
@@ -988,4 +1071,54 @@ fn directive_names_are_classified_by_exact_identifier() {
             SyntaxKind::Statement,
         ]
     );
+}
+
+#[test]
+fn standalone_quantifiers_and_punctuation_recover_as_errors() {
+    for src in ["+ + +.", ") ) )."] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Commentaria,
+            },
+        );
+
+        assert_eq!(parsed.syntax().to_string(), src);
+        assert!(
+            parsed
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagnosticCode::ParseError),
+            "{src:?}"
+        );
+        assert!(
+            parsed
+                .syntax()
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::Error),
+            "{src:?}"
+        );
+    }
+}
+
+#[test]
+fn predicate_synonym_with_punctuation_remains_valid() {
+    let src = "Alice = <https://example.org/alice>.\n";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+
+    assert!(parsed.diagnostics().is_empty());
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert!(parsed
+        .syntax()
+        .descendants()
+        .any(|node| node.kind() == SyntaxKind::Predicate));
+    assert!(!parsed
+        .syntax()
+        .descendants()
+        .any(|node| node.kind() == SyntaxKind::Error));
 }
