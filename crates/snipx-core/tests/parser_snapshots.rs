@@ -260,7 +260,13 @@ fn intralinea_closing_ignores_strings_and_capture_closes() {
             },
         );
 
-        assert!(parsed.diagnostics().is_empty(), "{src:?}");
+        assert!(
+            !parsed
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedIntralineaBlock),
+            "{src:?}"
+        );
         assert_eq!(parsed.syntax().to_string(), src);
         assert_eq!(
             parsed
@@ -401,6 +407,99 @@ fn ordinary_strings_honour_escaped_quotes_and_backslashes() {
 }
 
 #[test]
+fn unterminated_single_line_strings_stop_at_newlines_and_resume() {
+    let src = "Alice note \"unterminated\nBob friend Dana.\n";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert!(parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedString));
+    assert_eq!(
+        parsed
+            .syntax()
+            .descendants()
+            .filter(|node| node.kind() == SyntaxKind::Statement)
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn triple_strings_remain_multiline() {
+    let src = "Alice note \"\"\"line one\nline two\"\"\".\n";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    let triple_string = parsed
+        .syntax()
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::TripleString)
+        .expect("triple string");
+
+    assert!(parsed.diagnostics().is_empty());
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert_eq!(triple_string.to_string(), "\"\"\"line one\nline two\"\"\"");
+}
+
+#[test]
+fn intralinea_closing_recovers_after_unterminated_single_line_strings() {
+    for src in [
+        "Before {{Alice note \"unterminated\nBob friend Dana.\n}} After",
+        "Before {{Alice note \"unterminated\r\nBob friend Dana.\r\n}} After",
+    ] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Intralinea,
+            },
+        );
+        let trailing_text = parsed
+            .syntax()
+            .children_with_tokens()
+            .filter_map(|element| element.into_token())
+            .filter(|token| token.kind() == SyntaxKind::IntralineaText)
+            .last()
+            .expect("trailing host text");
+
+        assert_eq!(parsed.syntax().to_string(), src);
+        assert!(
+            parsed
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedString),
+            "{src:?}"
+        );
+        assert!(
+            !parsed
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedIntralineaBlock),
+            "{src:?}"
+        );
+        assert_eq!(
+            parsed
+                .syntax()
+                .descendants()
+                .filter(|node| node.kind() == SyntaxKind::Statement)
+                .count(),
+            2,
+            "{src:?}"
+        );
+        assert_eq!(trailing_text.text(), " After", "{src:?}");
+    }
+}
+
+#[test]
 fn numbers_do_not_consume_statement_terminators() {
     let src = "Answer value 42.\nRatio value 1.5.\n";
     let parsed = parse(
@@ -526,6 +625,44 @@ fn directives_after_statements_are_diagnosed_in_each_region() {
 }
 
 #[test]
+fn misplaced_exact_directives_keep_specific_cst_kinds() {
+    let src = concat!(
+        "Alice friend Bob.\n",
+        "@target <doc.txt>\n",
+        "@profile loose\n",
+        "@targeted value\n",
+        "@profiled value\n",
+    );
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    let child_kinds: Vec<_> = parsed.syntax().children().map(|node| node.kind()).collect();
+
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert_eq!(
+        child_kinds,
+        [
+            SyntaxKind::Statement,
+            SyntaxKind::TargetDirective,
+            SyntaxKind::ProfileDirective,
+            SyntaxKind::Directive,
+            SyntaxKind::Directive,
+        ]
+    );
+    assert_eq!(
+        parsed
+            .diagnostics()
+            .iter()
+            .filter(|diagnostic| diagnostic.code == DiagnosticCode::InvalidDirectivePosition)
+            .count(),
+        4
+    );
+}
+
+#[test]
 fn local_subject_markers_are_rejected_outside_intralinea() {
     for (src, input_form) in [
         ("< p O.", InputForm::Commentaria),
@@ -648,6 +785,33 @@ fn malformed_decorations_recover_losslessly() {
 }
 
 #[test]
+fn incomplete_statements_emit_parse_errors_and_error_nodes() {
+    for (src, input_form) in [
+        ("Alice.", InputForm::Commentaria),
+        (".", InputForm::Commentaria),
+        ("{{hair.}}", InputForm::Intralinea),
+    ] {
+        let parsed = parse(src, ParseOptions { input_form });
+
+        assert_eq!(parsed.syntax().to_string(), src);
+        assert!(
+            parsed
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagnosticCode::ParseError),
+            "{src:?}"
+        );
+        assert!(
+            parsed
+                .syntax()
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::Error),
+            "{src:?}"
+        );
+    }
+}
+
+#[test]
 fn object_decorations_attach_after_their_objects() {
     let src = r#"Alice friend Bob ::"childhood", Clara ::"rival"."#;
     let parsed = parse(
@@ -732,6 +896,32 @@ fn intralinea_closing_ignores_line_and_block_comments() {
             2,
             "{src:?}"
         );
+    }
+}
+
+#[test]
+fn intralinea_closing_ignores_uri_and_snippet_text_comment_markers() {
+    for src in [
+        "Before {{Alice source <https://example.test>.}} After",
+        "Before {{[https://example.test] source Example.}} After",
+    ] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Intralinea,
+            },
+        );
+        let trailing_text = parsed
+            .syntax()
+            .children_with_tokens()
+            .filter_map(|element| element.into_token())
+            .filter(|token| token.kind() == SyntaxKind::IntralineaText)
+            .last()
+            .expect("trailing host text");
+
+        assert!(parsed.diagnostics().is_empty(), "{src:?}");
+        assert_eq!(parsed.syntax().to_string(), src);
+        assert_eq!(trailing_text.text(), " After", "{src:?}");
     }
 }
 
