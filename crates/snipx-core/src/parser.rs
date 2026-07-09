@@ -263,6 +263,7 @@ struct RegionParser<'a> {
     context: RegionContext,
     pos: usize,
     statement_seen: bool,
+    unterminated_statement: Option<(usize, usize)>,
     events: Vec<Event>,
     diagnostics: Vec<Diagnostic>,
 }
@@ -275,6 +276,7 @@ impl<'a> RegionParser<'a> {
             context,
             pos: 0,
             statement_seen: false,
+            unterminated_statement: None,
             events: vec![Event::Start(SyntaxKind::Root)],
             diagnostics: Vec::new(),
         }
@@ -290,20 +292,31 @@ impl<'a> RegionParser<'a> {
                 self.parse_directive();
             } else if self.peek_char().is_some_and(char::is_whitespace) {
                 self.parse_whitespace();
-            } else if self.peek_char() == Some('~')
-                && !matches!(
-                    local_subject_marker_at(self.source, self.pos),
-                    LocalSubjectMarkerMatch::Valid(_) | LocalSubjectMarkerMatch::Invalid(_)
-                )
-            {
-                self.statement_seen = true;
-                self.parse_decoration();
             } else {
-                self.statement_seen = true;
+                self.begin_statement();
                 self.parse_statement();
             }
         }
+        if self.context == RegionContext::Commentaria {
+            self.report_unterminated_statement();
+        }
         self.events.push(Event::Finish);
+    }
+
+    fn begin_statement(&mut self) {
+        self.report_unterminated_statement();
+        self.statement_seen = true;
+    }
+
+    fn report_unterminated_statement(&mut self) {
+        if let Some((start, end)) = self.unterminated_statement.take() {
+            self.push_diagnostic(
+                DiagnosticCode::ParseError,
+                "Expected '.' statement terminator",
+                start,
+                end,
+            );
+        }
     }
 
     fn parse_whitespace(&mut self) {
@@ -343,6 +356,13 @@ impl<'a> RegionParser<'a> {
 
     fn parse_directive(&mut self) {
         let start = self.pos;
+        let name_start = start + 1;
+        let name_len = self.source[name_start..]
+            .chars()
+            .take_while(|ch| is_identifier_continue(*ch))
+            .map(char::len_utf8)
+            .sum::<usize>();
+        let name = &self.source[name_start..name_start + name_len];
         let kind = if self.statement_seen || !is_line_start(self.source, self.pos) {
             self.push_diagnostic(
                 DiagnosticCode::InvalidDirectivePosition,
@@ -351,12 +371,12 @@ impl<'a> RegionParser<'a> {
                 start + 1,
             );
             SyntaxKind::Directive
-        } else if self.source[self.pos..].starts_with("@target") {
-            SyntaxKind::TargetDirective
-        } else if self.source[self.pos..].starts_with("@profile") {
-            SyntaxKind::ProfileDirective
         } else {
-            SyntaxKind::Directive
+            match name {
+                "target" => SyntaxKind::TargetDirective,
+                "profile" => SyntaxKind::ProfileDirective,
+                _ => SyntaxKind::Directive,
+            }
         };
 
         let end = find_line_end(self.source, self.pos);
@@ -382,68 +402,52 @@ impl<'a> RegionParser<'a> {
     }
 
     fn parse_decoration(&mut self) {
-        let start = self.pos;
         self.events.push(Event::Start(SyntaxKind::Decoration));
-        self.token(SyntaxKind::Tilde, "~");
-        self.pos += 1;
-        let terminated = self.parse_statement_tail();
-        self.require_commentaria_terminator(terminated, start);
+        self.token(SyntaxKind::ColonColon, "::");
+        self.pos += 2;
+        self.consume_inline_whitespace();
+        if self.peek_char() == Some('"') {
+            self.parse_string();
+        } else {
+            let start = self.pos;
+            self.events.push(Event::Start(SyntaxKind::Error));
+            self.parse_value();
+            self.events.push(Event::Finish);
+            self.push_diagnostic(
+                DiagnosticCode::ParseError,
+                "Expected quoted string after decoration",
+                start,
+                self.pos,
+            );
+        }
         self.events.push(Event::Finish);
     }
 
     fn parse_statement(&mut self) {
         let start = self.pos;
         self.events.push(Event::Start(SyntaxKind::Statement));
-        self.events.push(Event::Start(SyntaxKind::Subject));
-        if !self.parse_subject_like() {
-            self.parse_value();
-        }
-        self.events.push(Event::Finish);
-
-        self.consume_inline_whitespace();
-
-        while !self.at_statement_end() {
-            self.events.push(Event::Start(SyntaxKind::Predicate));
-            self.parse_predicate_like();
+        if self.context != RegionContext::Commentaria && self.starts_with("::") {
+            self.parse_decoration();
+            self.consume_inline_whitespace();
+            self.parse_semicolon_continuation();
+        } else if self.is_ambient_predicate_start() {
+            self.parse_predicate_chain();
+        } else {
+            self.events.push(Event::Start(SyntaxKind::Subject));
+            if !self.parse_subject_like() {
+                self.parse_value();
+            }
             self.events.push(Event::Finish);
 
             self.consume_inline_whitespace();
 
-            if !self.at_statement_end() {
-                self.events.push(Event::Start(SyntaxKind::ObjectList));
-                self.events.push(Event::Start(SyntaxKind::Object));
-                self.parse_object_like();
-                self.events.push(Event::Finish);
+            if self.starts_with("::") {
+                self.parse_decoration();
                 self.consume_inline_whitespace();
-
-                while self.peek_char() == Some(',') || self.starts_with("::") {
-                    if self.peek_char() == Some(',') {
-                        self.token(SyntaxKind::Comma, ",");
-                        self.pos += 1;
-                    } else {
-                        self.token(SyntaxKind::ColonColon, "::");
-                        self.pos += 2;
-                    }
-                    self.consume_inline_whitespace();
-                    self.events.push(Event::Start(SyntaxKind::Object));
-                    self.parse_object_like();
-                    self.events.push(Event::Finish);
-                    self.consume_inline_whitespace();
-                }
-                self.events.push(Event::Finish);
+                self.parse_semicolon_continuation();
+            } else {
+                self.parse_predicate_chain();
             }
-
-            if self.peek_char() == Some(';') {
-                self.token(SyntaxKind::Semicolon, ";");
-                self.pos += 1;
-                self.parse_whitespace();
-                if self.pos >= self.source.len() {
-                    break;
-                }
-                continue;
-            }
-
-            break;
         }
 
         if matches!(
@@ -462,56 +466,81 @@ impl<'a> RegionParser<'a> {
         };
 
         self.events.push(Event::Finish);
-        self.require_commentaria_terminator(terminated, start);
+        if !terminated {
+            self.unterminated_statement = Some((start, self.pos));
+        }
     }
 
-    fn parse_statement_tail(&mut self) -> bool {
-        self.consume_inline_whitespace();
-        while !self.at_statement_end() {
-            if matches!(
-                local_subject_marker_at(self.source, self.pos),
-                LocalSubjectMarkerMatch::Valid(_) | LocalSubjectMarkerMatch::Invalid(_)
-            ) {
-                self.parse_local_subject_marker();
-                self.consume_inline_whitespace();
-            } else {
-                self.parse_value();
-                self.consume_inline_whitespace();
-                if self.peek_char() == Some(',') {
-                    self.token(SyntaxKind::Comma, ",");
-                    self.pos += 1;
-                    self.consume_inline_whitespace();
-                } else if self.peek_char() == Some(';') {
-                    self.token(SyntaxKind::Semicolon, ";");
-                    self.pos += 1;
-                    self.consume_inline_whitespace();
-                } else if self.starts_with("::") {
-                    self.token(SyntaxKind::ColonColon, "::");
-                    self.pos += 2;
-                    self.consume_inline_whitespace();
-                } else if self.peek_char() == Some('.') || self.at_statement_end() {
+    fn is_ambient_predicate_start(&self) -> bool {
+        if self.context == RegionContext::Commentaria {
+            return false;
+        }
+
+        matches!(self.peek_char(), Some('`'))
+            || self.peek_char().is_some_and(|ch| ch.is_ascii_lowercase())
+    }
+
+    fn parse_predicate_chain(&mut self) {
+        while !self.at_statement_end() && self.peek_char() != Some('.') {
+            self.events.push(Event::Start(SyntaxKind::Predicate));
+            self.parse_predicate_like();
+            self.events.push(Event::Finish);
+
+            self.consume_inline_whitespace();
+
+            if !self.at_statement_end()
+                && !matches!(self.peek_char(), Some('.') | Some(';'))
+                && !matches!(
+                    local_subject_marker_at(self.source, self.pos),
+                    LocalSubjectMarkerMatch::Valid(_) | LocalSubjectMarkerMatch::Invalid(_)
+                )
+            {
+                self.parse_object_list();
+            }
+
+            if self.peek_char() == Some(';') {
+                self.token(SyntaxKind::Semicolon, ";");
+                self.pos += 1;
+                self.parse_whitespace();
+                if self.pos >= self.source.len() {
                     break;
                 }
+                continue;
             }
-        }
 
-        if self.peek_char() == Some('.') {
-            self.token(SyntaxKind::Dot, ".");
-            self.pos += 1;
-            true
-        } else {
-            false
+            break;
         }
     }
 
-    fn require_commentaria_terminator(&mut self, terminated: bool, statement_start: usize) {
-        if self.context == RegionContext::Commentaria && !terminated {
-            self.push_diagnostic(
-                DiagnosticCode::ParseError,
-                "Expected '.' statement terminator",
-                statement_start,
-                self.pos,
-            );
+    fn parse_object_list(&mut self) {
+        self.events.push(Event::Start(SyntaxKind::ObjectList));
+        loop {
+            self.events.push(Event::Start(SyntaxKind::Object));
+            self.parse_object_like();
+            self.events.push(Event::Finish);
+            self.consume_inline_whitespace();
+
+            if self.starts_with("::") {
+                self.parse_decoration();
+                self.consume_inline_whitespace();
+            }
+
+            if self.peek_char() != Some(',') {
+                break;
+            }
+            self.token(SyntaxKind::Comma, ",");
+            self.pos += 1;
+            self.consume_inline_whitespace();
+        }
+        self.events.push(Event::Finish);
+    }
+
+    fn parse_semicolon_continuation(&mut self) {
+        if self.peek_char() == Some(';') {
+            self.token(SyntaxKind::Semicolon, ";");
+            self.pos += 1;
+            self.parse_whitespace();
+            self.parse_predicate_chain();
         }
     }
 
@@ -595,6 +624,12 @@ impl<'a> RegionParser<'a> {
             }
             Some('`') => {
                 self.parse_backtick_chunk();
+                true
+            }
+            Some('~') if self.source[self.pos + 1..].starts_with('[') => {
+                self.token(SyntaxKind::Tilde, "~");
+                self.pos += 1;
+                self.parse_snippet();
                 true
             }
             Some('+') | Some('*') | Some('?') => {
@@ -1115,9 +1150,27 @@ fn find_intralinea_close(source: &str, from: usize) -> Option<usize> {
     let mut cursor = from;
     let mut capture_depth = 0usize;
     let mut quote: Option<&'static str> = None;
+    let mut line_comment = false;
+    let mut block_comment = false;
 
     while cursor < source.len() {
         let tail = &source[cursor..];
+        if line_comment {
+            if tail.starts_with('\n') {
+                line_comment = false;
+            }
+            cursor += tail.chars().next()?.len_utf8();
+            continue;
+        }
+        if block_comment {
+            if tail.starts_with("*/") {
+                block_comment = false;
+                cursor += 2;
+            } else {
+                cursor += tail.chars().next()?.len_utf8();
+            }
+            continue;
+        }
         if let Some(delimiter) = quote {
             if delimiter == "\"" && tail.starts_with('\\') {
                 cursor += 1;
@@ -1145,6 +1198,12 @@ fn find_intralinea_close(source: &str, from: usize) -> Option<usize> {
         } else if tail.starts_with('`') {
             quote = Some("`");
             cursor += 1;
+        } else if capture_depth == 0 && tail.starts_with("//") {
+            line_comment = true;
+            cursor += 2;
+        } else if capture_depth == 0 && tail.starts_with("/*") {
+            block_comment = true;
+            cursor += 2;
         } else if tail.starts_with('{') {
             capture_depth += 1;
             cursor += 1;

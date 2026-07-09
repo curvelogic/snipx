@@ -71,8 +71,8 @@ ROOT
         IDENT
           TEXT "Bob"
         WHITESPACE " "
-      COLON_COLON "::"
-      OBJECT
+      DECORATION
+        COLON_COLON "::"
         STRING
           QUOTE "\""
           TEXT "childhood friend"
@@ -84,21 +84,25 @@ ROOT
           TEXT "Clara"
     DOT "."
   WHITESPACE "\n"
-  DECORATION
-    TILDE "~"
-    SNIPPET
-      L_BRACK "["
-      QUOTED_SNIPPET_PART
-        STRING
-          QUOTE "\""
-          TEXT "[Alice]"
-          QUOTE "\""
-      R_BRACK "]"
+  STATEMENT
+    SUBJECT
+      TILDE "~"
+      SNIPPET
+        L_BRACK "["
+        QUOTED_SNIPPET_PART
+          STRING
+            QUOTE "\""
+            TEXT "[Alice]"
+            QUOTE "\""
+        R_BRACK "]"
     WHITESPACE " "
-    IDENT
-      TEXT "italic"
+    PREDICATE
+      IDENT
+        TEXT "italic"
     WHITESPACE " "
-    BOOLEAN
-      TEXT "true"
+    OBJECT_LIST
+      OBJECT
+        BOOLEAN
+          TEXT "true"
     DOT "."
   WHITESPACE "\n"

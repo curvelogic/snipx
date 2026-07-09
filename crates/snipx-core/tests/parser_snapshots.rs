@@ -550,3 +550,252 @@ fn local_subject_markers_are_rejected_outside_intralinea() {
         );
     }
 }
+
+#[test]
+fn text_span_sigils_and_decorations_have_distinct_cst_roles() {
+    let text_span = parse(
+        "~[Alice] p O.",
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    let statement = text_span
+        .syntax()
+        .children()
+        .find(|node| node.kind() == SyntaxKind::Statement)
+        .expect("statement");
+    let subject = statement
+        .children()
+        .find(|node| node.kind() == SyntaxKind::Subject)
+        .expect("subject");
+
+    assert!(text_span.diagnostics().is_empty());
+    assert_eq!(text_span.syntax().to_string(), "~[Alice] p O.");
+    assert!(subject
+        .descendants_with_tokens()
+        .filter_map(|element| element.into_token())
+        .any(|token| token.kind() == SyntaxKind::Tilde));
+    assert!(subject
+        .descendants()
+        .any(|node| node.kind() == SyntaxKind::Snippet));
+    assert!(!text_span
+        .syntax()
+        .descendants()
+        .any(|node| node.kind() == SyntaxKind::Decoration));
+
+    for (src, expected_children) in [
+        (
+            r#"[Alice] ::"note"."#,
+            vec![SyntaxKind::Subject, SyntaxKind::Decoration],
+        ),
+        (r#"{{::"note".}}"#, vec![SyntaxKind::Decoration]),
+        ("/// ::\"note\".\n", vec![SyntaxKind::Decoration]),
+    ] {
+        let input_form = if src.starts_with("{{") {
+            InputForm::Intralinea
+        } else if src.starts_with("///") {
+            InputForm::Marginalia
+        } else {
+            InputForm::Commentaria
+        };
+        let parsed = parse(src, ParseOptions { input_form });
+        let statement = parsed
+            .syntax()
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::Statement)
+            .expect("statement");
+        let decoration = parsed
+            .syntax()
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::Decoration)
+            .expect("decoration");
+
+        assert!(parsed.diagnostics().is_empty(), "{src:?}");
+        assert_eq!(parsed.syntax().to_string(), src);
+        assert!(decoration
+            .descendants_with_tokens()
+            .filter_map(|element| element.into_token())
+            .any(|token| token.kind() == SyntaxKind::ColonColon));
+        assert!(decoration
+            .descendants()
+            .any(|node| node.kind() == SyntaxKind::String));
+        assert_eq!(
+            statement
+                .children()
+                .map(|node| node.kind())
+                .collect::<Vec<_>>(),
+            expected_children,
+            "{src:?}"
+        );
+    }
+}
+
+#[test]
+fn malformed_decorations_recover_losslessly() {
+    let src = "{{::note.}}";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Intralinea,
+        },
+    );
+
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert!(parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::ParseError));
+}
+
+#[test]
+fn object_decorations_attach_after_their_objects() {
+    let src = r#"Alice friend Bob ::"childhood", Clara ::"rival"."#;
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    let object_list = parsed
+        .syntax()
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::ObjectList)
+        .expect("object list");
+    let child_kinds: Vec<_> = object_list.children().map(|node| node.kind()).collect();
+
+    assert!(parsed.diagnostics().is_empty());
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert_eq!(
+        child_kinds,
+        [
+            SyntaxKind::Object,
+            SyntaxKind::Decoration,
+            SyntaxKind::Object,
+            SyntaxKind::Decoration,
+        ]
+    );
+}
+
+#[test]
+fn only_the_final_embedded_statement_may_omit_its_terminator() {
+    for (invalid, valid, input_form) in [
+        (
+            "```\nAlice friend Bob\nCarol friend Dana\n```\n",
+            "```\nAlice friend Bob.\nCarol friend Dana\n```\n",
+            InputForm::Marginalia,
+        ),
+        (
+            "{{Alice friend Bob\nCarol friend Dana}}",
+            "{{Alice friend Bob.\nCarol friend Dana}}",
+            InputForm::Intralinea,
+        ),
+    ] {
+        let invalid_parse = parse(invalid, ParseOptions { input_form });
+        let valid_parse = parse(valid, ParseOptions { input_form });
+
+        assert_eq!(invalid_parse.syntax().to_string(), invalid);
+        assert_eq!(
+            invalid_parse
+                .diagnostics()
+                .iter()
+                .filter(|diagnostic| diagnostic.code == DiagnosticCode::ParseError)
+                .count(),
+            1,
+            "{invalid:?}"
+        );
+        assert!(valid_parse.diagnostics().is_empty(), "{valid:?}");
+        assert_eq!(valid_parse.syntax().to_string(), valid);
+    }
+}
+
+#[test]
+fn intralinea_closing_ignores_line_and_block_comments() {
+    for src in [
+        "Before {{Alice friend Bob. // }} ignored\nCarol friend Dana.}} After",
+        "Before {{Alice friend Bob. /* }} ignored */ Carol friend Dana.}} After",
+    ] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Intralinea,
+            },
+        );
+
+        assert!(parsed.diagnostics().is_empty(), "{src:?}");
+        assert_eq!(parsed.syntax().to_string(), src);
+        assert_eq!(
+            parsed
+                .syntax()
+                .descendants()
+                .filter(|node| node.kind() == SyntaxKind::Statement)
+                .count(),
+            2,
+            "{src:?}"
+        );
+    }
+}
+
+#[test]
+fn ambient_statements_have_predicate_and_object_boundaries_without_subjects() {
+    for (src, input_form) in [
+        ("/// hair \"red\".\n", InputForm::Marginalia),
+        ("```\n`is afraid of` TheDark.\n```\n", InputForm::Marginalia),
+        ("{{hair \"red\".}}", InputForm::Intralinea),
+        ("{{`is afraid of` TheDark.}}", InputForm::Intralinea),
+    ] {
+        let parsed = parse(src, ParseOptions { input_form });
+        let statement = parsed
+            .syntax()
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::Statement)
+            .expect("statement");
+        let child_kinds: Vec<_> = statement.children().map(|node| node.kind()).collect();
+
+        assert!(parsed.diagnostics().is_empty(), "{src:?}");
+        assert_eq!(parsed.syntax().to_string(), src);
+        assert_eq!(
+            child_kinds,
+            [SyntaxKind::Predicate, SyntaxKind::ObjectList],
+            "{src:?}"
+        );
+    }
+
+    let commentaria = parse(
+        "hair \"red\".",
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    let statement = commentaria
+        .syntax()
+        .children()
+        .find(|node| node.kind() == SyntaxKind::Statement)
+        .expect("statement");
+
+    assert!(statement
+        .children()
+        .any(|node| node.kind() == SyntaxKind::Subject));
+}
+
+#[test]
+fn directive_names_are_classified_by_exact_identifier() {
+    let src = "@targeted value\n@profiled value\nAlice friend Bob.\n";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    let child_kinds: Vec<_> = parsed.syntax().children().map(|node| node.kind()).collect();
+
+    assert!(parsed.diagnostics().is_empty());
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert_eq!(
+        child_kinds,
+        [
+            SyntaxKind::Directive,
+            SyntaxKind::Directive,
+            SyntaxKind::Statement,
+        ]
+    );
+}
