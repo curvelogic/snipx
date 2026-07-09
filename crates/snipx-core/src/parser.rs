@@ -439,7 +439,7 @@ impl<'a> RegionParser<'a> {
         self.events.push(Event::Start(SyntaxKind::Decoration));
         self.token(SyntaxKind::ColonColon, "::");
         self.pos += 2;
-        self.consume_inline_whitespace();
+        self.consume_statement_trivia(false);
         if self.peek_char() == Some('"') {
             self.parse_string();
         } else {
@@ -468,7 +468,7 @@ impl<'a> RegionParser<'a> {
         if self.context != RegionContext::Commentaria && self.starts_with("::") {
             has_decoration = true;
             self.parse_decoration();
-            self.consume_inline_whitespace();
+            self.consume_statement_trivia(true);
             predicate_state = self.parse_semicolon_continuation();
         } else if self.is_ambient_predicate_start() {
             predicate_state = self.parse_predicate_chain();
@@ -498,12 +498,12 @@ impl<'a> RegionParser<'a> {
             }
             self.events.push(Event::Finish);
 
-            self.consume_inline_whitespace();
+            self.consume_statement_trivia(false);
 
             if self.starts_with("::") {
                 has_decoration = true;
                 self.parse_decoration();
-                self.consume_inline_whitespace();
+                self.consume_statement_trivia(true);
                 predicate_state = self.parse_semicolon_continuation();
             } else {
                 predicate_state = self.parse_predicate_chain();
@@ -575,7 +575,7 @@ impl<'a> RegionParser<'a> {
             }
             self.events.push(Event::Finish);
 
-            self.consume_inline_whitespace();
+            self.consume_statement_trivia(false);
 
             if !self.at_statement_end()
                 && !matches!(self.peek_char(), Some('.') | Some(';'))
@@ -603,7 +603,7 @@ impl<'a> RegionParser<'a> {
             if self.peek_char() == Some(';') {
                 self.token(SyntaxKind::Semicolon, ";");
                 self.pos += 1;
-                self.parse_whitespace();
+                self.consume_statement_trivia(true);
                 if self.pos >= self.source.len() {
                     break;
                 }
@@ -645,11 +645,11 @@ impl<'a> RegionParser<'a> {
                 state.has_error = true;
             }
             self.events.push(Event::Finish);
-            self.consume_inline_whitespace();
+            self.consume_statement_trivia(false);
 
             if self.starts_with("::") {
                 self.parse_decoration();
-                self.consume_inline_whitespace();
+                self.consume_statement_trivia(false);
             }
 
             if self.peek_char() != Some(',') {
@@ -657,7 +657,7 @@ impl<'a> RegionParser<'a> {
             }
             self.token(SyntaxKind::Comma, ",");
             self.pos += 1;
-            self.consume_inline_whitespace();
+            self.consume_statement_trivia(false);
         }
         self.events.push(Event::Finish);
         state
@@ -667,7 +667,7 @@ impl<'a> RegionParser<'a> {
         if self.peek_char() == Some(';') {
             self.token(SyntaxKind::Semicolon, ";");
             self.pos += 1;
-            self.parse_whitespace();
+            self.consume_statement_trivia(true);
             return self.parse_predicate_chain();
         }
         PredicateChainState::default()
@@ -677,7 +677,7 @@ impl<'a> RegionParser<'a> {
         match local_subject_marker_at(self.source, self.pos) {
             LocalSubjectMarkerMatch::Valid(_) if self.context == RegionContext::Intralinea => {
                 self.parse_local_subject_marker();
-                self.consume_inline_whitespace();
+                self.consume_statement_trivia(false);
                 ValueParseState {
                     has_value: true,
                     has_error: false,
@@ -685,7 +685,7 @@ impl<'a> RegionParser<'a> {
             }
             LocalSubjectMarkerMatch::Valid(_) | LocalSubjectMarkerMatch::Invalid(_) => {
                 self.parse_local_subject_marker();
-                self.consume_inline_whitespace();
+                self.consume_statement_trivia(false);
                 ValueParseState {
                     has_value: false,
                     has_error: true,
@@ -713,11 +713,7 @@ impl<'a> RegionParser<'a> {
                 has_error: false,
             }
         } else if self.peek_char().is_some_and(|ch| ch.is_ascii_lowercase()) {
-            self.parse_predicate_identifier();
-            ValueParseState {
-                has_value: true,
-                has_error: false,
-            }
+            self.parse_predicate_identifier()
         } else {
             self.events.push(Event::Start(SyntaxKind::Error));
             let invalid = self.parse_statement_value(false);
@@ -750,7 +746,7 @@ impl<'a> RegionParser<'a> {
             }
             state.has_value |= value.has_value;
             state.has_error |= value.has_error;
-            self.consume_inline_whitespace();
+            self.consume_statement_trivia(false);
         }
         state
     }
@@ -1250,12 +1246,32 @@ impl<'a> RegionParser<'a> {
         self.events.push(Event::Finish);
     }
 
-    fn parse_predicate_identifier(&mut self) {
+    fn parse_predicate_identifier(&mut self) -> ValueParseState {
         let start = self.pos;
         self.consume_while(is_identifier_continue);
-        self.events.push(Event::Start(SyntaxKind::Identifier));
+        let kind = if matches!(&self.source[start..self.pos], "true" | "false") {
+            SyntaxKind::Boolean
+        } else {
+            SyntaxKind::Identifier
+        };
+        if kind == SyntaxKind::Boolean {
+            self.events.push(Event::Start(SyntaxKind::Error));
+        }
+        self.events.push(Event::Start(kind));
         self.token_from(SyntaxKind::Text, start, self.pos);
         self.events.push(Event::Finish);
+        if kind == SyntaxKind::Boolean {
+            self.events.push(Event::Finish);
+            ValueParseState {
+                has_value: false,
+                has_error: true,
+            }
+        } else {
+            ValueParseState {
+                has_value: true,
+                has_error: false,
+            }
+        }
     }
 
     fn consume_inline_whitespace(&mut self) {
@@ -1270,6 +1286,34 @@ impl<'a> RegionParser<'a> {
             } else {
                 break;
             }
+        }
+    }
+
+    fn consume_statement_trivia(&mut self, allow_newline: bool) {
+        loop {
+            if self.starts_with("//") && !self.starts_with("///") {
+                self.parse_line_comment();
+                if !allow_newline {
+                    break;
+                }
+                continue;
+            }
+            if self.starts_with("/*") {
+                self.parse_block_comment();
+                continue;
+            }
+            if self.peek_char().is_some_and(char::is_whitespace) {
+                if allow_newline {
+                    self.parse_whitespace();
+                } else {
+                    if matches!(self.peek_char(), Some('\n')) {
+                        break;
+                    }
+                    self.consume_inline_whitespace();
+                }
+                continue;
+            }
+            break;
         }
     }
 

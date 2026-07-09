@@ -285,6 +285,66 @@ fn semicolon_carry_forward_across_newline_is_one_statement_chain() {
 }
 
 #[test]
+fn inline_comments_are_statement_trivia_and_preserve_semicolon_chains() {
+    let src = "Alice /* binding */ friend Bob.\nAlice a Character; // carry-forward comment\n  friend Bob.\n";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+
+    assert!(parsed.diagnostics().is_empty());
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert_eq!(
+        parsed
+            .syntax()
+            .descendants()
+            .filter(|node| node.kind() == SyntaxKind::Statement)
+            .count(),
+        2
+    );
+    assert_eq!(
+        parsed
+            .syntax()
+            .descendants()
+            .filter(|node| node.kind() == SyntaxKind::Predicate)
+            .count(),
+        3
+    );
+    assert_eq!(
+        parsed
+            .syntax()
+            .descendants()
+            .filter(|node| {
+                matches!(
+                    node.kind(),
+                    SyntaxKind::LineComment | SyntaxKind::BlockComment
+                )
+            })
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn unterminated_inline_block_comments_preserve_source_and_diagnose() {
+    let src = "Alice /* binding";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert!(parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedBlockComment));
+}
+
+#[test]
 fn intralinea_closing_ignores_strings_and_capture_closes() {
     for src in [r#"{{ note "a }} b". }}"#, "{{{Alice}}}"] {
         let parsed = parse(
@@ -1273,6 +1333,57 @@ fn non_identifier_predicates_recover_as_errors() {
             "{src:?}"
         );
     }
+}
+
+#[test]
+fn boolean_literals_do_not_parse_as_predicates() {
+    let invalid = parse(
+        "Alice true Bob.",
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    let statement = invalid
+        .syntax()
+        .children()
+        .find(|node| node.kind() == SyntaxKind::Statement)
+        .expect("statement");
+    let predicate = statement
+        .children()
+        .find(|node| node.kind() == SyntaxKind::Predicate)
+        .expect("predicate");
+    let object_list = statement
+        .children()
+        .find(|node| node.kind() == SyntaxKind::ObjectList)
+        .expect("object list");
+
+    assert_eq!(invalid.syntax().to_string(), "Alice true Bob.");
+    assert!(invalid
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::ParseError));
+    assert!(predicate
+        .descendants()
+        .any(|node| node.kind() == SyntaxKind::Error));
+    assert!(object_list
+        .descendants()
+        .any(|node| node.kind() == SyntaxKind::Identifier));
+
+    let valid = parse(
+        "Alice note true.",
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    let boolean = valid
+        .syntax()
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::Boolean)
+        .expect("boolean object");
+
+    assert!(valid.diagnostics().is_empty());
+    assert_eq!(valid.syntax().to_string(), "Alice note true.");
+    assert_eq!(boolean.to_string(), "true");
 }
 
 #[test]
