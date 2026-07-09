@@ -605,6 +605,49 @@ fn snippet_ranges_honour_escaped_quotes_and_backslashes() {
 }
 
 #[test]
+fn malformed_snippet_capture_forms_recover_with_errors() {
+    for src in ["[Alice {one} {two}] p O.", "[Alice {bad}..Bob] p O."] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Commentaria,
+            },
+        );
+        let snippet = parsed
+            .syntax()
+            .descendants()
+            .find(|node| matches!(node.kind(), SyntaxKind::Snippet | SyntaxKind::RangeSnippet))
+            .expect("snippet");
+
+        assert_eq!(parsed.syntax().to_string(), src, "{src:?}");
+        assert!(
+            parsed
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagnosticCode::ParseError),
+            "{src:?}"
+        );
+        assert!(
+            snippet
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::Error),
+            "{src:?}"
+        );
+    }
+
+    let valid = "[looked at {Alice}]+ is Alice.";
+    let parsed = parse(
+        valid,
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+
+    assert!(parsed.diagnostics().is_empty());
+    assert_eq!(parsed.syntax().to_string(), valid);
+}
+
+#[test]
 fn statement_terminator_policy_depends_on_input_form() {
     let commentaria = parse(
         "Alice friend Bob",
@@ -1151,7 +1194,11 @@ fn directive_inline_values_do_not_duplicate_following_source() {
 
 #[test]
 fn non_identifier_predicates_recover_as_errors() {
-    for src in [r#"Alice "not a predicate" Bob."#, "Alice [Bob] Carol."] {
+    for src in [
+        r#"Alice "not a predicate" Bob."#,
+        "Alice [Bob] Carol.",
+        "Alice Bob Carol.",
+    ] {
         let parsed = parse(
             src,
             ParseOptions {

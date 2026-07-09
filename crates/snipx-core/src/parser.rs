@@ -712,7 +712,7 @@ impl<'a> RegionParser<'a> {
                 has_value: true,
                 has_error: false,
             }
-        } else if self.peek_char().is_some_and(is_identifier_start) {
+        } else if self.peek_char().is_some_and(|ch| ch.is_ascii_lowercase()) {
             self.parse_predicate_identifier();
             ValueParseState {
                 has_value: true,
@@ -943,7 +943,8 @@ impl<'a> RegionParser<'a> {
 
     fn parse_snippet(&mut self) {
         let start = self.pos;
-        let kind = if snippet_contains_range(&self.source[self.pos..]) {
+        let is_range = snippet_contains_range(&self.source[self.pos..]);
+        let kind = if is_range {
             SyntaxKind::RangeSnippet
         } else {
             SyntaxKind::Snippet
@@ -952,6 +953,7 @@ impl<'a> RegionParser<'a> {
         self.token(SyntaxKind::LBrack, "[");
         self.pos += 1;
         let mut text_start = self.pos;
+        let mut capture_count = 0usize;
         while let Some(ch) = self.peek_char() {
             if ch == ']' {
                 break;
@@ -969,7 +971,26 @@ impl<'a> RegionParser<'a> {
                 if self.pos > text_start {
                     self.token_from(SyntaxKind::Text, text_start, self.pos);
                 }
+                let capture_start = self.pos;
+                let invalid_capture = is_range || capture_count > 0;
+                if invalid_capture {
+                    self.events.push(Event::Start(SyntaxKind::Error));
+                }
                 self.parse_capture();
+                if invalid_capture {
+                    self.events.push(Event::Finish);
+                    self.push_diagnostic(
+                        DiagnosticCode::ParseError,
+                        if is_range {
+                            "Captures are not allowed inside range snippets"
+                        } else {
+                            "Snippets may contain at most one capture"
+                        },
+                        capture_start,
+                        self.pos,
+                    );
+                }
+                capture_count += 1;
                 text_start = self.pos;
             } else {
                 self.advance_char();
