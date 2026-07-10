@@ -951,7 +951,7 @@ impl<'a> RegionParser<'a> {
         let mut text_start = self.pos;
         let mut capture_count = 0usize;
         while let Some(ch) = self.peek_char() {
-            if ch == ']' {
+            if ch == ']' || matches!(ch, '\n' | '\r') {
                 break;
             }
             if ch == '"' {
@@ -1023,7 +1023,7 @@ impl<'a> RegionParser<'a> {
         self.pos += 1;
         let inner_start = self.pos;
         while let Some(ch) = self.peek_char() {
-            if ch == '}' {
+            if ch == '}' || matches!(ch, '\n' | '\r') {
                 break;
             }
             self.advance_char();
@@ -1595,14 +1595,18 @@ fn find_intralinea_close(source: &str, from: usize) -> Option<usize> {
         } else if capture_depth == 0 && tail.starts_with("/*") {
             block_comment = true;
             cursor += 2;
+        } else if let Some(prefix) = intralinea_close_capture_prefix(tail, capture_depth) {
+            if prefix == 0 {
+                return Some(cursor);
+            }
+            capture_depth -= prefix;
+            cursor += prefix;
         } else if tail.starts_with('{') {
             capture_depth += 1;
             cursor += 1;
         } else if tail.starts_with('}') && capture_depth > 0 {
             capture_depth -= 1;
             cursor += 1;
-        } else if tail.starts_with("}}") {
-            return Some(cursor);
         } else {
             cursor += tail.chars().next()?.len_utf8();
         }
@@ -1623,8 +1627,15 @@ fn intralinea_snippet_len(source: &str) -> Option<usize> {
 
     while cursor < source.len() {
         let tail = &source[cursor..];
-        if !quoted && capture_depth == 0 && tail.starts_with("}}") {
-            return Some(cursor);
+        if !quoted {
+            if let Some(prefix) = intralinea_close_capture_prefix(tail, capture_depth) {
+                if prefix == 0 {
+                    return Some(cursor);
+                }
+                capture_depth -= prefix;
+                cursor += prefix;
+                continue;
+            }
         }
 
         let ch = tail.chars().next()?;
@@ -1649,6 +1660,15 @@ fn intralinea_snippet_len(source: &str) -> Option<usize> {
     }
 
     Some(source.len())
+}
+
+fn intralinea_close_capture_prefix(source: &str, capture_depth: usize) -> Option<usize> {
+    if !source.starts_with("}}") {
+        return None;
+    }
+
+    let closing_run = source.chars().take_while(|ch| *ch == '}').count();
+    Some(capture_depth.min(closing_run.saturating_sub(2)))
 }
 
 fn intralinea_uri_literal_len(source: &str) -> Option<usize> {
@@ -1728,12 +1748,25 @@ fn is_identifier_continue(ch: char) -> bool {
 }
 
 fn snippet_contains_range(source: &str) -> bool {
-    let mut chars = source.char_indices().peekable();
+    let mut cursor = usize::from(source.starts_with('['));
     let mut quoted = false;
     let mut escaped = false;
     let mut capture_depth = 0usize;
 
-    while let Some((_, ch)) = chars.next() {
+    while cursor < source.len() {
+        let tail = &source[cursor..];
+        if !quoted {
+            if let Some(prefix) = intralinea_close_capture_prefix(tail, capture_depth) {
+                if prefix == 0 {
+                    return false;
+                }
+                capture_depth -= prefix;
+                cursor += prefix;
+                continue;
+            }
+        }
+
+        let ch = tail.chars().next().expect("cursor stays within source");
         if quoted {
             if escaped {
                 escaped = false;
@@ -1742,19 +1775,17 @@ fn snippet_contains_range(source: &str) -> bool {
             } else if ch == '"' {
                 quoted = false;
             }
-            continue;
-        }
-
-        match ch {
-            '"' if capture_depth == 0 => quoted = true,
-            '{' => capture_depth += 1,
-            '}' if capture_depth > 0 => capture_depth -= 1,
-            ']' if capture_depth == 0 => return false,
-            '.' if capture_depth == 0 && chars.peek().is_some_and(|(_, next)| *next == '.') => {
-                return true;
+        } else {
+            match ch {
+                '"' if capture_depth == 0 => quoted = true,
+                '{' => capture_depth += 1,
+                '}' if capture_depth > 0 => capture_depth -= 1,
+                ']' | '\n' | '\r' if capture_depth == 0 => return false,
+                '.' if capture_depth == 0 && tail.starts_with("..") => return true,
+                _ => {}
             }
-            _ => {}
         }
+        cursor += ch.len_utf8();
     }
 
     false

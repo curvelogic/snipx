@@ -1145,6 +1145,125 @@ fn unterminated_quoted_snippet_still_allows_intralinea_close() {
 }
 
 #[test]
+fn malformed_capture_still_allows_intralinea_close() {
+    let src = "Before {{Alice rel {Bob }} After";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Intralinea,
+        },
+    );
+    let trailing_text = parsed
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|element| element.into_token())
+        .filter(|token| token.kind() == SyntaxKind::IntralineaText)
+        .last()
+        .expect("trailing host text");
+    let capture_diagnostic = parsed
+        .diagnostics()
+        .iter()
+        .find(|diagnostic| diagnostic.message == "Unterminated capture")
+        .expect("unterminated capture diagnostic");
+    let close_start = src.find("}}").expect("intralinea close");
+
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert!(!parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedIntralineaBlock));
+    assert_eq!(trailing_text.text(), " After");
+    assert_eq!(
+        capture_diagnostic.span.as_ref().map(|span| span.end),
+        Some(close_start)
+    );
+}
+
+#[test]
+fn unterminated_snippet_stops_at_newline_and_recovers_statement() {
+    let src = "[Alice a Character.\nBob friend Carol.\n";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    let statements: Vec<_> = parsed
+        .syntax()
+        .children()
+        .filter(|node| node.kind() == SyntaxKind::Statement)
+        .collect();
+    let snippet_diagnostic = parsed
+        .diagnostics()
+        .iter()
+        .find(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedSnippet)
+        .expect("unterminated snippet diagnostic");
+    let second_statement = statements.get(1).expect("second statement");
+    let child_kinds: Vec<_> = second_statement
+        .children()
+        .map(|node| node.kind())
+        .collect();
+
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert_eq!(statements.len(), 2);
+    assert_eq!(second_statement.to_string(), "Bob friend Carol.");
+    assert_eq!(
+        child_kinds,
+        vec![
+            SyntaxKind::Subject,
+            SyntaxKind::Predicate,
+            SyntaxKind::ObjectList
+        ]
+    );
+    assert_eq!(
+        snippet_diagnostic.span.as_ref().map(|span| span.end),
+        src.find('\n')
+    );
+}
+
+#[test]
+fn unterminated_capture_stops_at_newline_and_recovers_statement() {
+    let src = "Alice friend {Bob\nCarol friend Dana.\n";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    let statements: Vec<_> = parsed
+        .syntax()
+        .children()
+        .filter(|node| node.kind() == SyntaxKind::Statement)
+        .collect();
+    let capture_diagnostic = parsed
+        .diagnostics()
+        .iter()
+        .find(|diagnostic| diagnostic.message == "Unterminated capture")
+        .expect("unterminated capture diagnostic");
+    let second_statement = statements.get(1).expect("second statement");
+    let child_kinds: Vec<_> = second_statement
+        .children()
+        .map(|node| node.kind())
+        .collect();
+
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert_eq!(statements.len(), 2);
+    assert_eq!(second_statement.to_string(), "Carol friend Dana.");
+    assert_eq!(
+        child_kinds,
+        vec![
+            SyntaxKind::Subject,
+            SyntaxKind::Predicate,
+            SyntaxKind::ObjectList
+        ]
+    );
+    assert_eq!(
+        capture_diagnostic.span.as_ref().map(|span| span.end),
+        src.find('\n')
+    );
+}
+
+#[test]
 fn ambient_statements_have_predicate_and_object_boundaries_without_subjects() {
     for (src, input_form) in [
         ("/// hair \"red\".\n", InputForm::Marginalia),
