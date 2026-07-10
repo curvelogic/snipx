@@ -285,6 +285,42 @@ fn semicolon_carry_forward_across_newline_is_one_statement_chain() {
 }
 
 #[test]
+fn dangling_semicolon_continuations_are_diagnosed_and_preserved() {
+    for (src, input_form) in [
+        ("Alice friend Bob;.", InputForm::Commentaria),
+        ("{{Alice friend Bob;}}", InputForm::Intralinea),
+    ] {
+        let parsed = parse(src, ParseOptions { input_form });
+
+        assert_eq!(parsed.syntax().to_string(), src, "{src:?}");
+        assert!(
+            parsed
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagnosticCode::ParseError),
+            "{src:?}"
+        );
+        assert!(
+            parsed
+                .syntax()
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::Error),
+            "{src:?}"
+        );
+    }
+
+    for (src, input_form) in [
+        ("Alice friend Bob; likes Carol.", InputForm::Commentaria),
+        ("{{Alice friend Bob; likes Carol}}", InputForm::Intralinea),
+    ] {
+        let parsed = parse(src, ParseOptions { input_form });
+
+        assert!(parsed.diagnostics().is_empty(), "{src:?}");
+        assert_eq!(parsed.syntax().to_string(), src, "{src:?}");
+    }
+}
+
+#[test]
 fn inline_comments_are_statement_trivia_and_preserve_semicolon_chains() {
     let src = "Alice /* binding */ friend Bob.\nAlice a Character; // carry-forward comment\n  friend Bob.\n";
     let parsed = parse(
@@ -1104,6 +1140,35 @@ fn intralinea_closing_ignores_line_and_block_comments() {
             "{src:?}"
         );
     }
+}
+
+#[test]
+fn unterminated_block_comments_do_not_hide_intralinea_closers() {
+    let src = "Before {{Alice friend Bob. /* dangling }} After";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Intralinea,
+        },
+    );
+    let trailing_text = parsed
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|element| element.into_token())
+        .filter(|token| token.kind() == SyntaxKind::IntralineaText)
+        .last()
+        .expect("trailing host text");
+
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert!(parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedBlockComment));
+    assert!(!parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedIntralineaBlock));
+    assert_eq!(trailing_text.text(), " After");
 }
 
 #[test]

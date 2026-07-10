@@ -602,10 +602,21 @@ impl<'a> RegionParser<'a> {
             }
 
             if self.peek_char() == Some(';') {
+                let semicolon_start = self.pos;
                 self.token(SyntaxKind::Semicolon, ";");
                 self.pos += 1;
                 self.consume_statement_trivia(true);
-                if self.pos >= self.source.len() {
+                if self.pos >= self.source.len()
+                    || matches!(self.peek_char(), Some('.') | Some('\n'))
+                {
+                    self.push_empty_error();
+                    self.push_diagnostic(
+                        DiagnosticCode::ParseError,
+                        "Expected predicate after semicolon continuation",
+                        semicolon_start,
+                        self.pos,
+                    );
+                    state.has_error = true;
                     break;
                 }
                 continue;
@@ -1531,11 +1542,14 @@ fn find_intralinea_close(source: &str, from: usize) -> Option<usize> {
             continue;
         }
         if block_comment {
-            if tail.starts_with("*/") {
+            let block_end = tail.find("*/");
+            if let Some(block_end) = block_end {
                 block_comment = false;
-                cursor += 2;
+                cursor += block_end + 2;
+            } else if let Some(intralinea_close) = tail.find("}}") {
+                return Some(cursor + intralinea_close);
             } else {
-                cursor += tail.chars().next()?.len_utf8();
+                cursor = source.len();
             }
             continue;
         }
