@@ -413,6 +413,43 @@ fn recognises_all_local_subject_markers() {
 }
 
 #[test]
+fn suffix_local_subject_markers_can_precede_statement_terminators() {
+    let src = "{{p O >.\nq R.}}";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Intralinea,
+        },
+    );
+    let marker = parsed
+        .syntax()
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::LocalSubjectMarker)
+        .expect("local subject marker");
+
+    assert!(parsed.diagnostics().is_empty());
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert_eq!(marker.to_string(), ">");
+    assert_eq!(
+        parsed
+            .syntax()
+            .descendants()
+            .filter(|node| node.kind() == SyntaxKind::Statement)
+            .count(),
+        2
+    );
+    assert_eq!(
+        parsed
+            .syntax()
+            .descendants_with_tokens()
+            .filter_map(|element| element.into_token())
+            .filter(|token| token.kind() == SyntaxKind::Dot)
+            .count(),
+        2
+    );
+}
+
+#[test]
 fn diagnoses_malformed_local_subject_markers() {
     for src in ["{{<<< p O. }}", "{{<>> p O. }}", "{{~>>> p O. }}"] {
         let parsed = parse(
@@ -591,6 +628,39 @@ fn intralinea_closing_recovers_after_unterminated_single_line_strings() {
         );
         assert_eq!(trailing_text.text(), " After", "{src:?}");
     }
+}
+
+#[test]
+fn intralinea_closing_recovers_after_escaped_newline_in_quoted_snippet_part() {
+    let src = "Before {{[\"unterminated\\\n}} After";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Intralinea,
+        },
+    );
+    let trailing_text = parsed
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|element| element.into_token())
+        .filter(|token| token.kind() == SyntaxKind::IntralineaText)
+        .last()
+        .expect("trailing host text");
+
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert!(parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedString));
+    assert!(parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedSnippet));
+    assert!(!parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedIntralineaBlock));
+    assert_eq!(trailing_text.text(), " After");
 }
 
 #[test]
@@ -1329,6 +1399,28 @@ fn unterminated_capture_does_not_become_range_snippet() {
                 .message
                 .contains("Captures are not allowed inside range snippets"))
     );
+}
+
+#[test]
+fn range_snippet_detection_ignores_intralinea_close_rules_outside_intralinea() {
+    for (src, input_form) in [
+        ("[left }} .. right] rel Target.\n", InputForm::Commentaria),
+        (
+            "/// [left }} .. right] rel Target.\n",
+            InputForm::Marginalia,
+        ),
+    ] {
+        let parsed = parse(src, ParseOptions { input_form });
+        let snippet = parsed
+            .syntax()
+            .descendants()
+            .find(|node| matches!(node.kind(), SyntaxKind::Snippet | SyntaxKind::RangeSnippet))
+            .expect("snippet");
+
+        assert!(parsed.diagnostics().is_empty(), "{src:?}");
+        assert_eq!(parsed.syntax().to_string(), src, "{src:?}");
+        assert_eq!(snippet.kind(), SyntaxKind::RangeSnippet, "{src:?}");
+    }
 }
 
 #[test]

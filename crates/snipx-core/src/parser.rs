@@ -530,6 +530,7 @@ impl<'a> RegionParser<'a> {
             LocalSubjectMarkerMatch::Valid(_) | LocalSubjectMarkerMatch::Invalid(_)
         ) {
             self.parse_local_subject_marker();
+            self.consume_statement_trivia(false);
         }
 
         let terminated = if self.peek_char() == Some('.') {
@@ -939,7 +940,10 @@ impl<'a> RegionParser<'a> {
 
     fn parse_snippet(&mut self) {
         let start = self.pos;
-        let is_range = snippet_contains_range(&self.source[self.pos..]);
+        let is_range = snippet_contains_range(
+            &self.source[self.pos..],
+            self.context == RegionContext::Intralinea,
+        );
         let kind = if is_range {
             SyntaxKind::RangeSnippet
         } else {
@@ -1623,7 +1627,6 @@ fn intralinea_snippet_len(source: &str) -> Option<usize> {
     let mut cursor = 1;
     let mut capture_depth = 0usize;
     let mut quoted = false;
-    let mut escaped = false;
 
     while cursor < source.len() {
         let tail = &source[cursor..];
@@ -1640,11 +1643,17 @@ fn intralinea_snippet_len(source: &str) -> Option<usize> {
 
         let ch = tail.chars().next()?;
         if quoted {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if matches!(ch, '\n' | '\r' | '"') {
+            if ch == '\\' {
+                cursor += 1;
+                if cursor < source.len() {
+                    let next = source[cursor..].chars().next()?;
+                    if !matches!(next, '\n' | '\r') {
+                        cursor += next.len_utf8();
+                    }
+                }
+                continue;
+            }
+            if matches!(ch, '\n' | '\r' | '"') {
                 quoted = false;
             }
         } else {
@@ -1725,11 +1734,7 @@ fn local_subject_marker_at(source: &str, pos: usize) -> LocalSubjectMarkerMatch 
     }
 
     let marker_len = marker_start + angle_len;
-    if tail[marker_len..]
-        .chars()
-        .next()
-        .is_some_and(|ch| !ch.is_whitespace())
-    {
+    if !is_local_subject_marker_boundary(tail[marker_len..].chars().next()) {
         return LocalSubjectMarkerMatch::None;
     }
 
@@ -1747,15 +1752,14 @@ fn is_identifier_continue(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '/')
 }
 
-fn snippet_contains_range(source: &str) -> bool {
+fn snippet_contains_range(source: &str, intralinea_close_aware: bool) -> bool {
     let mut cursor = usize::from(source.starts_with('['));
     let mut quoted = false;
-    let mut escaped = false;
     let mut capture_depth = 0usize;
 
     while cursor < source.len() {
         let tail = &source[cursor..];
-        if !quoted {
+        if intralinea_close_aware && !quoted {
             if let Some(prefix) = intralinea_close_capture_prefix(tail, capture_depth) {
                 if prefix == 0 {
                     return false;
@@ -1771,11 +1775,20 @@ fn snippet_contains_range(source: &str) -> bool {
             return false;
         }
         if quoted {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == '"' {
+            if ch == '\\' {
+                cursor += 1;
+                if cursor < source.len() {
+                    let next = source[cursor..]
+                        .chars()
+                        .next()
+                        .expect("cursor stays within source");
+                    if !matches!(next, '\n' | '\r') {
+                        cursor += next.len_utf8();
+                    }
+                }
+                continue;
+            }
+            if ch == '"' {
                 quoted = false;
             }
         } else {
@@ -1792,4 +1805,8 @@ fn snippet_contains_range(source: &str) -> bool {
     }
 
     false
+}
+
+fn is_local_subject_marker_boundary(next: Option<char>) -> bool {
+    next.is_none_or(|ch| ch.is_whitespace() || matches!(ch, '.' | ',' | ';'))
 }
