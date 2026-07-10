@@ -1572,6 +1572,15 @@ fn find_intralinea_close(source: &str, from: usize) -> Option<usize> {
                 } else {
                     cursor += ch.len_utf8();
                 }
+            } else if delimiter == "\"\"\"" {
+                if let Some(triple_end) = tail.find("\"\"\"") {
+                    quote = None;
+                    cursor += triple_end + 3;
+                } else if let Some(intralinea_close) = tail.find("}}") {
+                    return Some(cursor + intralinea_close);
+                } else {
+                    cursor = source.len();
+                }
             } else if delimiter == "`" {
                 let ch = tail.chars().next()?;
                 if matches!(ch, '\n' | '\r') {
@@ -1582,9 +1591,6 @@ fn find_intralinea_close(source: &str, from: usize) -> Option<usize> {
                 } else {
                     cursor += ch.len_utf8();
                 }
-            } else if delimiter == "\"\"\"" && tail.starts_with("\"\"\"") {
-                quote = None;
-                cursor += 3;
             } else if tail.starts_with(delimiter) {
                 quote = None;
                 cursor += delimiter.len();

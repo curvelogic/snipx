@@ -700,6 +700,35 @@ fn intralinea_closing_recovers_after_escaped_newline_in_quoted_snippet_part() {
 }
 
 #[test]
+fn intralinea_closing_recovers_after_unterminated_triple_strings() {
+    let src = "Before {{Alice note \"\"\"unterminated\n}} After";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Intralinea,
+        },
+    );
+    let trailing_text = parsed
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|element| element.into_token())
+        .filter(|token| token.kind() == SyntaxKind::IntralineaText)
+        .last()
+        .expect("trailing host text");
+
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert!(parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedString));
+    assert!(!parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedIntralineaBlock));
+    assert_eq!(trailing_text.text(), " After");
+}
+
+#[test]
 fn numbers_do_not_consume_statement_terminators() {
     let src = "Answer value 42.\nRatio value 1.5.\n";
     let parsed = parse(
