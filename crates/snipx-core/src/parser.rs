@@ -1767,6 +1767,9 @@ fn snippet_contains_range(source: &str) -> bool {
         }
 
         let ch = tail.chars().next().expect("cursor stays within source");
+        if matches!(ch, '\n' | '\r') {
+            return false;
+        }
         if quoted {
             if escaped {
                 escaped = false;

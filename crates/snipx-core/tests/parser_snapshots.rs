@@ -1264,6 +1264,74 @@ fn unterminated_capture_stops_at_newline_and_recovers_statement() {
 }
 
 #[test]
+fn unterminated_quoted_snippet_does_not_become_range_snippet() {
+    let src = "[\"unterminated\nBob\" .. Carol] friend Dana.\n";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    let snippet = parsed
+        .syntax()
+        .descendants()
+        .find(|node| matches!(node.kind(), SyntaxKind::Snippet | SyntaxKind::RangeSnippet))
+        .expect("snippet");
+
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert_eq!(snippet.kind(), SyntaxKind::Snippet);
+    assert!(parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedString));
+    assert!(parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedSnippet));
+    assert!(
+        !parsed.diagnostics().iter().any(|diagnostic| diagnostic.code
+            == DiagnosticCode::ParseError
+            && diagnostic
+                .message
+                .contains("Captures are not allowed inside range snippets"))
+    );
+}
+
+#[test]
+fn unterminated_capture_does_not_become_range_snippet() {
+    let src = "[Alice {unterminated\nBob} .. Carol] friend Dana.\n";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    let snippet = parsed
+        .syntax()
+        .descendants()
+        .find(|node| matches!(node.kind(), SyntaxKind::Snippet | SyntaxKind::RangeSnippet))
+        .expect("snippet");
+
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert_eq!(snippet.kind(), SyntaxKind::Snippet);
+    assert!(parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.message == "Unterminated capture"));
+    assert!(parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedSnippet));
+    assert!(
+        !parsed.diagnostics().iter().any(|diagnostic| diagnostic.code
+            == DiagnosticCode::ParseError
+            && diagnostic
+                .message
+                .contains("Captures are not allowed inside range snippets"))
+    );
+}
+
+#[test]
 fn ambient_statements_have_predicate_and_object_boundaries_without_subjects() {
     for (src, input_form) in [
         ("/// hair \"red\".\n", InputForm::Marginalia),
