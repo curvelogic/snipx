@@ -315,7 +315,11 @@ fn dangling_semicolon_continuations_are_diagnosed_and_preserved() {
     ] {
         let parsed = parse(src, ParseOptions { input_form });
 
-        assert!(parsed.diagnostics().is_empty(), "{src:?}");
+        assert!(
+            parsed.diagnostics().is_empty(),
+            "{src:?}: {:?}",
+            parsed.diagnostics()
+        );
         assert_eq!(parsed.syntax().to_string(), src, "{src:?}");
     }
 }
@@ -1358,6 +1362,48 @@ fn unterminated_same_line_constructs_still_allow_intralinea_close() {
                 .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedIntralineaBlock),
             "{src:?}"
         );
+        assert_eq!(trailing_text.text(), " After", "{src:?}");
+    }
+}
+
+#[test]
+fn intralinea_closing_prefers_lexical_closers_inside_same_line_constructs() {
+    for (src, expected_block) in [
+        (
+            "Before {{Alice note \"a }} b\".}} After",
+            "{{Alice note \"a }} b\".}}",
+        ),
+        (
+            "Before {{Alice `rel }} text` Bob.}} After",
+            "{{Alice `rel }} text` Bob.}}",
+        ),
+        (
+            "Before {{[\"a }} b\"] rel Target.}} After",
+            "{{[\"a }} b\"] rel Target.}}",
+        ),
+    ] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Intralinea,
+            },
+        );
+        let block = parsed
+            .syntax()
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::IntralineaBlock)
+            .expect("intralinea block");
+        let trailing_text = parsed
+            .syntax()
+            .children_with_tokens()
+            .filter_map(|element| element.into_token())
+            .filter(|token| token.kind() == SyntaxKind::IntralineaText)
+            .last()
+            .expect("trailing host text");
+
+        assert!(parsed.diagnostics().is_empty(), "{src:?}");
+        assert_eq!(parsed.syntax().to_string(), src, "{src:?}");
+        assert_eq!(block.to_string(), expected_block, "{src:?}");
         assert_eq!(trailing_text.text(), " After", "{src:?}");
     }
 }

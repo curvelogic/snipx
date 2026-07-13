@@ -1555,25 +1555,17 @@ fn find_intralinea_close(source: &str, from: usize) -> Option<usize> {
         }
         if let Some(delimiter) = quote {
             if delimiter == "\"" {
-                if tail.starts_with("}}") {
-                    return Some(cursor);
-                }
-                let ch = tail.chars().next()?;
-                if matches!(ch, '\n' | '\r') {
-                    quote = None;
-                } else if ch == '\\' {
-                    cursor += 1;
-                    if cursor < source.len() {
-                        let next = source[cursor..].chars().next()?;
-                        if !matches!(next, '\n' | '\r') {
-                            cursor += next.len_utf8();
-                        }
+                match scan_same_line_quote_boundary(tail, '"', true) {
+                    SameLineQuoteBoundary::LexicalClose(idx) => {
+                        quote = None;
+                        cursor += idx + 1;
                     }
-                } else if ch == '"' {
-                    quote = None;
-                    cursor += 1;
-                } else {
-                    cursor += ch.len_utf8();
+                    SameLineQuoteBoundary::Newline(idx) => {
+                        quote = None;
+                        cursor += idx + 1;
+                    }
+                    SameLineQuoteBoundary::HostClose(idx) => return Some(cursor + idx),
+                    SameLineQuoteBoundary::Eof => cursor = source.len(),
                 }
             } else if delimiter == "\"\"\"" {
                 if let Some(triple_end) = tail.find("\"\"\"") {
@@ -1585,17 +1577,17 @@ fn find_intralinea_close(source: &str, from: usize) -> Option<usize> {
                     cursor = source.len();
                 }
             } else if delimiter == "`" {
-                if tail.starts_with("}}") {
-                    return Some(cursor);
-                }
-                let ch = tail.chars().next()?;
-                if matches!(ch, '\n' | '\r') {
-                    quote = None;
-                } else if ch == '`' {
-                    quote = None;
-                    cursor += 1;
-                } else {
-                    cursor += ch.len_utf8();
+                match scan_same_line_quote_boundary(tail, '`', false) {
+                    SameLineQuoteBoundary::LexicalClose(idx) => {
+                        quote = None;
+                        cursor += idx + 1;
+                    }
+                    SameLineQuoteBoundary::Newline(idx) => {
+                        quote = None;
+                        cursor += idx + 1;
+                    }
+                    SameLineQuoteBoundary::HostClose(idx) => return Some(cursor + idx),
+                    SameLineQuoteBoundary::Eof => cursor = source.len(),
                 }
             } else if tail.starts_with(delimiter) {
                 quote = None;
@@ -1667,37 +1659,91 @@ fn intralinea_snippet_len(source: &str) -> Option<usize> {
             }
         }
 
-        let ch = tail.chars().next()?;
         if quoted {
-            if tail.starts_with("}}") {
-                return Some(cursor);
-            }
-            if ch == '\\' {
-                cursor += 1;
-                if cursor < source.len() {
-                    let next = source[cursor..].chars().next()?;
-                    if !matches!(next, '\n' | '\r') {
-                        cursor += next.len_utf8();
-                    }
+            match scan_same_line_quote_boundary(tail, '"', true) {
+                SameLineQuoteBoundary::LexicalClose(idx) => {
+                    quoted = false;
+                    cursor += idx + 1;
                 }
-                continue;
+                SameLineQuoteBoundary::Newline(idx) => {
+                    quoted = false;
+                    cursor += idx + 1;
+                }
+                SameLineQuoteBoundary::HostClose(idx) => return Some(cursor + idx),
+                SameLineQuoteBoundary::Eof => return Some(source.len()),
             }
-            if matches!(ch, '\n' | '\r' | '"') {
-                quoted = false;
-            }
-        } else {
-            match ch {
-                '"' => quoted = true,
-                '{' => capture_depth += 1,
-                '}' if capture_depth > 0 => capture_depth -= 1,
-                ']' if capture_depth == 0 => return Some(cursor + 1),
-                _ => {}
-            }
+            continue;
+        }
+
+        let ch = tail.chars().next()?;
+        match ch {
+            '"' => quoted = true,
+            '{' => capture_depth += 1,
+            '}' if capture_depth > 0 => capture_depth -= 1,
+            ']' if capture_depth == 0 => return Some(cursor + 1),
+            _ => {}
         }
         cursor += ch.len_utf8();
     }
 
     Some(source.len())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SameLineQuoteBoundary {
+    LexicalClose(usize),
+    Newline(usize),
+    HostClose(usize),
+    Eof,
+}
+
+fn scan_same_line_quote_boundary(
+    source: &str,
+    lexical_close: char,
+    supports_escapes: bool,
+) -> SameLineQuoteBoundary {
+    let mut cursor = 0;
+    let mut recovery_close = None;
+
+    while cursor < source.len() {
+        let tail = &source[cursor..];
+        if tail.starts_with("}}") {
+            recovery_close.get_or_insert(cursor);
+            cursor += 2;
+            continue;
+        }
+
+        let ch = tail
+            .chars()
+            .next()
+            .expect("tail is non-empty while cursor < source.len()");
+        if matches!(ch, '\n' | '\r') {
+            return recovery_close
+                .map(SameLineQuoteBoundary::HostClose)
+                .unwrap_or(SameLineQuoteBoundary::Newline(cursor));
+        }
+        if ch == lexical_close {
+            return SameLineQuoteBoundary::LexicalClose(cursor);
+        }
+        if supports_escapes && ch == '\\' {
+            cursor += 1;
+            if cursor < source.len() {
+                let next = source[cursor..]
+                    .chars()
+                    .next()
+                    .expect("cursor checked against source length");
+                if !matches!(next, '\n' | '\r') {
+                    cursor += next.len_utf8();
+                }
+            }
+        } else {
+            cursor += ch.len_utf8();
+        }
+    }
+
+    recovery_close
+        .map(SameLineQuoteBoundary::HostClose)
+        .unwrap_or(SameLineQuoteBoundary::Eof)
 }
 
 fn intralinea_close_capture_prefix(source: &str, capture_depth: usize) -> Option<usize> {
