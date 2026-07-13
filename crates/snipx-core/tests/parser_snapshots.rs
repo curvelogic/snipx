@@ -325,6 +325,33 @@ fn dangling_semicolon_continuations_are_diagnosed_and_preserved() {
 }
 
 #[test]
+fn decoration_only_semicolon_continuations_are_diagnosed_and_preserved() {
+    for (src, input_form) in [
+        ("[Alice] ::\"note\";.", InputForm::Commentaria),
+        ("{{::\"note\";}}", InputForm::Intralinea),
+        ("/// ::\"note\";\n", InputForm::Marginalia),
+    ] {
+        let parsed = parse(src, ParseOptions { input_form });
+
+        assert_eq!(parsed.syntax().to_string(), src, "{src:?}");
+        assert!(
+            parsed
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagnosticCode::ParseError),
+            "{src:?}"
+        );
+        assert!(
+            parsed
+                .syntax()
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::Error),
+            "{src:?}"
+        );
+    }
+}
+
+#[test]
 fn inline_comments_are_statement_trivia_and_preserve_semicolon_chains() {
     let src = "Alice /* binding */ friend Bob.\nAlice a Character; // carry-forward comment\n  friend Bob.\n";
     let parsed = parse(

@@ -696,13 +696,25 @@ impl<'a> RegionParser<'a> {
     }
 
     fn parse_semicolon_continuation(&mut self) -> PredicateChainState {
+        let mut state = PredicateChainState::default();
         if self.peek_char() == Some(';') {
+            let semicolon_start = self.pos;
             self.token(SyntaxKind::Semicolon, ";");
             self.pos += 1;
             self.consume_statement_trivia(true);
-            return self.parse_predicate_chain();
+            state = self.parse_predicate_chain();
+            if !state.has_predicate && !state.has_error {
+                self.push_empty_error();
+                self.push_diagnostic(
+                    DiagnosticCode::ParseError,
+                    "Expected predicate after semicolon continuation",
+                    semicolon_start,
+                    self.pos,
+                );
+                state.has_error = true;
+            }
         }
-        PredicateChainState::default()
+        state
     }
 
     fn parse_subject_like(&mut self) -> ValueParseState {
