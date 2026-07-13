@@ -104,7 +104,7 @@ fn parses_intralinea_blocks_and_local_subjects() {
 
 #[test]
 fn parses_ranges_and_all_snippet_quantifiers() {
-    let src = "[The quick..jumped]* before [Alice]? and [Bob]+.\n";
+    let src = "[The quick..jumped]* before [Alice]?, [Bob]+.\n";
 
     let parsed = parse(
         src,
@@ -1775,6 +1775,84 @@ fn malformed_trailing_object_fragments_after_valid_objects_emit_diagnostics() {
         assert!(parsed.diagnostics().is_empty(), "{src:?}");
         assert_eq!(parsed.syntax().to_string(), src);
     }
+}
+
+#[test]
+fn lowercase_identifiers_recover_in_subject_and_object_positions() {
+    for src in ["alice friend Bob.", "Alice friend bob."] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Commentaria,
+            },
+        );
+
+        assert_eq!(parsed.syntax().to_string(), src);
+        assert!(
+            parsed
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagnosticCode::ParseError),
+            "{src:?}"
+        );
+        assert!(
+            parsed
+                .syntax()
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::Error),
+            "{src:?}"
+        );
+    }
+
+    for src in ["Alice friend Bob.", "Alice note true.", "Alice note false."] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Commentaria,
+            },
+        );
+
+        assert!(parsed.diagnostics().is_empty(), "{src:?}");
+        assert_eq!(parsed.syntax().to_string(), src);
+    }
+}
+
+#[test]
+fn adjacent_object_values_require_commas() {
+    for src in ["Alice friend Bob Carol.", r#"Alice note "red" "blue"."#] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Commentaria,
+            },
+        );
+
+        assert_eq!(parsed.syntax().to_string(), src);
+        assert!(
+            parsed
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagnosticCode::ParseError),
+            "{src:?}"
+        );
+        assert!(
+            parsed
+                .syntax()
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::Error),
+            "{src:?}"
+        );
+    }
+
+    let valid = parse(
+        "Alice friend Bob, Carol.",
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+
+    assert!(valid.diagnostics().is_empty());
+    assert_eq!(valid.syntax().to_string(), "Alice friend Bob, Carol.");
 }
 
 #[test]

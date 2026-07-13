@@ -498,15 +498,18 @@ impl<'a> RegionParser<'a> {
             let subject_state = self.parse_subject_like();
             if subject_state.has_value {
                 has_subject = true;
-            } else if subject_state.has_error {
+            }
+            if subject_state.has_error {
+                has_error = true;
+            }
+            if !subject_state.has_value && subject_state.has_error {
                 self.push_diagnostic(
                     DiagnosticCode::ParseError,
                     "Expected subject",
                     subject_start,
                     self.pos,
                 );
-                has_error = true;
-            } else {
+            } else if !subject_state.has_value {
                 self.push_empty_error();
                 self.push_diagnostic(
                     DiagnosticCode::ParseError,
@@ -514,7 +517,6 @@ impl<'a> RegionParser<'a> {
                     subject_start,
                     subject_start,
                 );
-                has_error = true;
             }
             self.events.push(Event::Finish);
 
@@ -677,11 +679,33 @@ impl<'a> RegionParser<'a> {
                 state.has_error = true;
             }
             self.events.push(Event::Finish);
-            self.consume_statement_trivia(false);
 
             if self.starts_with("::") {
                 self.parse_decoration();
                 self.consume_statement_trivia(false);
+            }
+
+            while self.starts_statement_value(false) {
+                let error_start = self.pos;
+                self.events.push(Event::Start(SyntaxKind::Error));
+                let parsed_extra_value = self.parse_value();
+                if !parsed_extra_value {
+                    self.push_empty_error();
+                }
+                self.events.push(Event::Finish);
+                self.push_diagnostic(
+                    DiagnosticCode::ParseError,
+                    "Expected comma between object values",
+                    error_start,
+                    self.pos,
+                );
+                state.has_error = true;
+                self.consume_statement_trivia(false);
+
+                if self.starts_with("::") {
+                    self.parse_decoration();
+                    self.consume_statement_trivia(false);
+                }
             }
 
             if self.peek_char() != Some(',') {
@@ -776,26 +800,22 @@ impl<'a> RegionParser<'a> {
     }
 
     fn parse_object_like(&mut self) -> ValueParseState {
-        let mut state = ValueParseState::default();
-        while !self.at_statement_end() {
-            if matches!(self.peek_char(), Some(',') | Some(';') | Some('.'))
-                || self.starts_with("::")
-                || matches!(
-                    local_subject_marker_at(self.source, self.pos),
-                    LocalSubjectMarkerMatch::Valid(_) | LocalSubjectMarkerMatch::Invalid(_)
-                )
-            {
-                break;
-            }
+        if self.at_statement_end()
+            || matches!(self.peek_char(), Some(',') | Some(';') | Some('.'))
+            || self.starts_with("::")
+            || matches!(
+                local_subject_marker_at(self.source, self.pos),
+                LocalSubjectMarkerMatch::Valid(_) | LocalSubjectMarkerMatch::Invalid(_)
+            )
+        {
+            ValueParseState::default()
+        } else {
             let value = self.parse_statement_value(StatementValueContext::SubjectOrObject, false);
-            if !value.has_value && !value.has_error {
-                break;
+            if value.has_value || value.has_error {
+                self.consume_statement_trivia(false);
             }
-            state.has_value |= value.has_value;
-            state.has_error |= value.has_error;
-            self.consume_statement_trivia(false);
+            value
         }
-        state
     }
 
     fn parse_inline_value_until(&mut self, end: usize) {
@@ -893,10 +913,14 @@ impl<'a> RegionParser<'a> {
                 }
             }
             Some(ch) if is_identifier_start(ch) => {
-                self.parse_identifier_like();
-                ValueParseState {
-                    has_value: true,
-                    has_error: false,
+                if context == StatementValueContext::SubjectOrObject {
+                    self.parse_subject_or_object_identifier()
+                } else {
+                    self.parse_identifier_like();
+                    ValueParseState {
+                        has_value: true,
+                        has_error: false,
+                    }
                 }
             }
             Some('=') if allow_equals => {
@@ -1337,6 +1361,47 @@ impl<'a> RegionParser<'a> {
         self.events.push(Event::Finish);
     }
 
+    fn parse_subject_or_object_identifier(&mut self) -> ValueParseState {
+        let start = self.pos;
+        self.consume_while(is_identifier_continue);
+        let text = &self.source[start..self.pos];
+        let kind = if matches!(text, "true" | "false") {
+            SyntaxKind::Boolean
+        } else {
+            SyntaxKind::Identifier
+        };
+        let invalid = kind == SyntaxKind::Identifier
+            && text
+                .chars()
+                .next()
+                .is_some_and(|ch| ch.is_ascii_lowercase());
+
+        if invalid {
+            self.events.push(Event::Start(SyntaxKind::Error));
+        }
+        self.events.push(Event::Start(kind));
+        self.token_from(SyntaxKind::Text, start, self.pos);
+        self.events.push(Event::Finish);
+        if invalid {
+            self.events.push(Event::Finish);
+            self.push_diagnostic(
+                DiagnosticCode::ParseError,
+                "Lowercase identifiers are only valid as predicates",
+                start,
+                self.pos,
+            );
+            ValueParseState {
+                has_value: true,
+                has_error: true,
+            }
+        } else {
+            ValueParseState {
+                has_value: true,
+                has_error: false,
+            }
+        }
+    }
+
     fn parse_predicate_identifier(&mut self) -> ValueParseState {
         let start = self.pos;
         self.consume_while(is_identifier_continue);
@@ -1410,6 +1475,27 @@ impl<'a> RegionParser<'a> {
 
     fn at_statement_end(&self) -> bool {
         matches!(self.peek_char(), None | Some('\n'))
+    }
+
+    fn starts_statement_value(&self, allow_equals: bool) -> bool {
+        if self.starts_with("::")
+            || matches!(
+                local_subject_marker_at(self.source, self.pos),
+                LocalSubjectMarkerMatch::Valid(_) | LocalSubjectMarkerMatch::Invalid(_)
+            )
+        {
+            return false;
+        }
+
+        match self.peek_char() {
+            Some('[' | '{' | '"' | '<' | '`') => true,
+            Some('~') => self.source[self.pos..].starts_with("~["),
+            Some('+') | Some('*') | Some('?') => true,
+            Some(ch) if ch.is_ascii_digit() => true,
+            Some(ch) if is_identifier_start(ch) => true,
+            Some('=') if allow_equals => true,
+            _ => false,
+        }
     }
 
     fn consume_identifier_like(&mut self) {
