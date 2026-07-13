@@ -575,7 +575,9 @@ impl<'a> RegionParser<'a> {
         }
 
         matches!(self.peek_char(), Some('`'))
-            || self.peek_char().is_some_and(|ch| ch.is_ascii_lowercase())
+            || self
+                .peek_char()
+                .is_some_and(|ch| ch.is_ascii_lowercase() || ch == '=')
     }
 
     fn parse_predicate_chain(&mut self) -> PredicateChainState {
@@ -1374,7 +1376,7 @@ impl<'a> RegionParser<'a> {
             && text
                 .chars()
                 .next()
-                .is_some_and(|ch| ch.is_ascii_lowercase());
+                .is_some_and(|ch| ch.is_ascii_lowercase() || ch == '_');
 
         if invalid {
             self.events.push(Event::Start(SyntaxKind::Error));

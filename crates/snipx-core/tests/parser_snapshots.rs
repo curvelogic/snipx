@@ -1648,8 +1648,13 @@ fn range_snippet_detection_ignores_intralinea_close_rules_outside_intralinea() {
 fn ambient_statements_have_predicate_and_object_boundaries_without_subjects() {
     for (src, input_form) in [
         ("/// hair \"red\".\n", InputForm::Marginalia),
+        (
+            "/// = <https://example.org/alice>.\n",
+            InputForm::Marginalia,
+        ),
         ("```\n`is afraid of` TheDark.\n```\n", InputForm::Marginalia),
         ("{{hair \"red\".}}", InputForm::Intralinea),
+        ("{{= <https://example.org/alice>.}}", InputForm::Intralinea),
         ("{{`is afraid of` TheDark.}}", InputForm::Intralinea),
     ] {
         let parsed = parse(src, ParseOptions { input_form });
@@ -1814,6 +1819,46 @@ fn lowercase_identifiers_recover_in_subject_and_object_positions() {
 
         assert!(parsed.diagnostics().is_empty(), "{src:?}");
         assert_eq!(parsed.syntax().to_string(), src);
+    }
+}
+
+#[test]
+fn underscore_identifiers_recover_in_subject_and_object_positions() {
+    for src in ["_alice friend Bob.", "Alice friend _bob."] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Commentaria,
+            },
+        );
+
+        assert_eq!(parsed.syntax().to_string(), src, "{src:?}");
+        assert!(
+            parsed
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagnosticCode::ParseError),
+            "{src:?}"
+        );
+        assert!(
+            parsed
+                .syntax()
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::Error),
+            "{src:?}"
+        );
+    }
+
+    for src in ["Alice friend Bob.", "Alice note true.", "Alice note false."] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Commentaria,
+            },
+        );
+
+        assert!(parsed.diagnostics().is_empty(), "{src:?}");
+        assert_eq!(parsed.syntax().to_string(), src, "{src:?}");
     }
 }
 
