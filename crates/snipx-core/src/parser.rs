@@ -1555,6 +1555,9 @@ fn find_intralinea_close(source: &str, from: usize) -> Option<usize> {
         }
         if let Some(delimiter) = quote {
             if delimiter == "\"" {
+                if tail.starts_with("}}") {
+                    return Some(cursor);
+                }
                 let ch = tail.chars().next()?;
                 if matches!(ch, '\n' | '\r') {
                     quote = None;
@@ -1582,6 +1585,9 @@ fn find_intralinea_close(source: &str, from: usize) -> Option<usize> {
                     cursor = source.len();
                 }
             } else if delimiter == "`" {
+                if tail.starts_with("}}") {
+                    return Some(cursor);
+                }
                 let ch = tail.chars().next()?;
                 if matches!(ch, '\n' | '\r') {
                     quote = None;
@@ -1663,6 +1669,9 @@ fn intralinea_snippet_len(source: &str) -> Option<usize> {
 
         let ch = tail.chars().next()?;
         if quoted {
+            if tail.starts_with("}}") {
+                return Some(cursor);
+            }
             if ch == '\\' {
                 cursor += 1;
                 if cursor < source.len() {

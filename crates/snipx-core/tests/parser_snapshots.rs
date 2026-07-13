@@ -1309,6 +1309,60 @@ fn unterminated_quoted_snippet_still_allows_intralinea_close() {
 }
 
 #[test]
+fn unterminated_same_line_constructs_still_allow_intralinea_close() {
+    for (src, expected_codes) in [
+        (
+            "Before {{Alice note \"unterminated }} After",
+            vec![DiagnosticCode::UnterminatedString],
+        ),
+        (
+            "Before {{Alice `unterminated }} After",
+            vec![DiagnosticCode::ParseError],
+        ),
+        (
+            "Before {{[\"unterminated }} After",
+            vec![
+                DiagnosticCode::UnterminatedString,
+                DiagnosticCode::UnterminatedSnippet,
+            ],
+        ),
+    ] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Intralinea,
+            },
+        );
+        let trailing_text = parsed
+            .syntax()
+            .children_with_tokens()
+            .filter_map(|element| element.into_token())
+            .filter(|token| token.kind() == SyntaxKind::IntralineaText)
+            .last()
+            .expect("trailing host text");
+
+        assert_eq!(parsed.syntax().to_string(), src);
+        for expected_code in expected_codes {
+            assert!(
+                parsed
+                    .diagnostics()
+                    .iter()
+                    .any(|diagnostic| diagnostic.code == expected_code),
+                "{src:?}"
+            );
+        }
+        assert!(
+            !parsed
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedIntralineaBlock),
+            "{src:?}"
+        );
+        assert_eq!(trailing_text.text(), " After", "{src:?}");
+    }
+}
+
+#[test]
 fn malformed_capture_still_allows_intralinea_close() {
     let src = "Before {{Alice rel {Bob }} After";
     let parsed = parse(
