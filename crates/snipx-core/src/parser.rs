@@ -104,15 +104,21 @@ fn parse_marginalia(source: &str) -> Parse {
             continue;
         }
 
-        if is_line_start(source, cursor) && source[cursor..].starts_with("```") {
+        if let Some(opening_marker) = marginalia_fence_marker(source, cursor) {
             let opening_end = find_line_end(source, cursor);
             let opening_content_end = line_content_end(source, opening_end);
             let body_start = next_line_start(source, opening_end);
-            let raw_info = &source[cursor + 3..opening_content_end];
+            let raw_info = &source[opening_marker + 3..opening_content_end];
             let info = raw_info.trim();
-            let closing_start = find_closing_fence(source, body_start);
+            let closing_fence = find_closing_fence(source, body_start);
 
             events.push(Event::Start(SyntaxKind::Fence));
+            if opening_marker > cursor {
+                events.push(Event::Token(
+                    SyntaxKind::Whitespace,
+                    source[cursor..opening_marker].to_string(),
+                ));
+            }
             events.push(Event::Token(SyntaxKind::Backtick, "```".to_string()));
             if !raw_info.is_empty() {
                 events.push(Event::Token(SyntaxKind::FenceInfo, raw_info.to_string()));
@@ -124,7 +130,9 @@ fn parse_marginalia(source: &str) -> Parse {
                 ));
             }
 
-            let body_end = closing_start.unwrap_or(source.len());
+            let body_end = closing_fence
+                .map(|(closing_line_start, _)| closing_line_start)
+                .unwrap_or(source.len());
             let body = &source[body_start..body_end];
             if info.is_empty() || info == "snipx" {
                 let region = parse_snipx_region(body, body_start, RegionContext::Marginalia);
@@ -134,11 +142,17 @@ fn parse_marginalia(source: &str) -> Parse {
                 events.push(Event::Token(SyntaxKind::FenceBody, body.to_string()));
             }
 
-            if let Some(closing_start) = closing_start {
+            if let Some((closing_line_start, closing_marker)) = closing_fence {
+                if closing_marker > closing_line_start {
+                    events.push(Event::Token(
+                        SyntaxKind::Whitespace,
+                        source[closing_line_start..closing_marker].to_string(),
+                    ));
+                }
                 events.push(Event::Token(SyntaxKind::Backtick, "```".to_string()));
-                let closing_end = find_line_end(source, closing_start);
+                let closing_end = find_line_end(source, closing_line_start);
                 let closing_content_end = line_content_end(source, closing_end);
-                let closing_suffix = &source[closing_start + 3..closing_content_end];
+                let closing_suffix = &source[closing_marker + 3..closing_content_end];
                 if !closing_suffix.is_empty() {
                     events.push(Event::Token(
                         SyntaxKind::FenceInfo,
@@ -294,6 +308,12 @@ struct ObjectListState {
 struct ValueParseState {
     has_value: bool,
     has_error: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StatementValueContext {
+    SubjectOrObject,
+    PredicateRecovery,
 }
 
 impl<'a> RegionParser<'a> {
@@ -703,7 +723,9 @@ impl<'a> RegionParser<'a> {
                     has_error: true,
                 }
             }
-            LocalSubjectMarkerMatch::None => self.parse_statement_value(false),
+            LocalSubjectMarkerMatch::None => {
+                self.parse_statement_value(StatementValueContext::SubjectOrObject, false)
+            }
         }
     }
 
@@ -728,7 +750,8 @@ impl<'a> RegionParser<'a> {
             self.parse_predicate_identifier()
         } else {
             self.events.push(Event::Start(SyntaxKind::Error));
-            let invalid = self.parse_statement_value(false);
+            let invalid =
+                self.parse_statement_value(StatementValueContext::PredicateRecovery, false);
             if !invalid.has_value && !invalid.has_error {
                 self.push_empty_error();
             }
@@ -752,7 +775,7 @@ impl<'a> RegionParser<'a> {
             {
                 break;
             }
-            let value = self.parse_statement_value(false);
+            let value = self.parse_statement_value(StatementValueContext::SubjectOrObject, false);
             if !value.has_value && !value.has_error {
                 break;
             }
@@ -779,7 +802,11 @@ impl<'a> RegionParser<'a> {
         }
     }
 
-    fn parse_statement_value(&mut self, allow_equals: bool) -> ValueParseState {
+    fn parse_statement_value(
+        &mut self,
+        context: StatementValueContext,
+        allow_equals: bool,
+    ) -> ValueParseState {
         match self.peek_char() {
             Some('[') => {
                 self.parse_snippet();
@@ -789,10 +816,17 @@ impl<'a> RegionParser<'a> {
                 }
             }
             Some('{') => {
-                self.parse_capture();
-                ValueParseState {
-                    has_value: true,
-                    has_error: false,
+                if context == StatementValueContext::PredicateRecovery {
+                    self.parse_capture();
+                    ValueParseState {
+                        has_value: true,
+                        has_error: false,
+                    }
+                } else {
+                    self.parse_disallowed_statement_value(
+                        "Captures are only valid inside snippets",
+                        Self::parse_capture,
+                    )
                 }
             }
             Some('"') => {
@@ -810,10 +844,17 @@ impl<'a> RegionParser<'a> {
                 }
             }
             Some('`') => {
-                self.parse_backtick_chunk();
-                ValueParseState {
-                    has_value: true,
-                    has_error: false,
+                if context == StatementValueContext::PredicateRecovery {
+                    self.parse_backtick_chunk();
+                    ValueParseState {
+                        has_value: true,
+                        has_error: false,
+                    }
+                } else {
+                    self.parse_disallowed_statement_value(
+                        "Backtick chunks are only valid as predicates",
+                        Self::parse_backtick_chunk,
+                    )
                 }
             }
             Some('~') if self.source[self.pos..].starts_with("~[") => {
@@ -862,6 +903,22 @@ impl<'a> RegionParser<'a> {
                     has_error: true,
                 }
             }
+        }
+    }
+
+    fn parse_disallowed_statement_value(
+        &mut self,
+        message: &'static str,
+        parse: fn(&mut Self),
+    ) -> ValueParseState {
+        let start = self.pos;
+        self.events.push(Event::Start(SyntaxKind::Error));
+        parse(self);
+        self.events.push(Event::Finish);
+        self.push_diagnostic(DiagnosticCode::ParseError, message, start, self.pos);
+        ValueParseState {
+            has_value: false,
+            has_error: true,
         }
     }
 
@@ -1494,15 +1551,29 @@ fn marginalia_slash_marker(source: &str, line_start: usize) -> Option<usize> {
         .then_some(marker_start)
 }
 
+fn marginalia_fence_marker(source: &str, line_start: usize) -> Option<usize> {
+    if !is_line_start(source, line_start) {
+        return None;
+    }
+
+    let line_end = find_line_end(source, line_start);
+    let content_end = line_content_end(source, line_end);
+    let indentation = leading_ws_len(&source[line_start..content_end]);
+    let marker_start = line_start + indentation;
+    source[marker_start..content_end]
+        .starts_with("```")
+        .then_some(marker_start)
+}
+
 fn is_line_start(source: &str, pos: usize) -> bool {
     pos == 0 || source[..pos].ends_with('\n')
 }
 
-fn find_closing_fence(source: &str, from: usize) -> Option<usize> {
+fn find_closing_fence(source: &str, from: usize) -> Option<(usize, usize)> {
     let mut cursor = from;
     while cursor < source.len() {
-        if is_line_start(source, cursor) && source[cursor..].starts_with("```") {
-            return Some(cursor);
+        if let Some(marker_start) = marginalia_fence_marker(source, cursor) {
+            return Some((cursor, marker_start));
         }
         let line_end = find_line_end(source, cursor);
         cursor = next_line_start(source, line_end);
@@ -1515,7 +1586,7 @@ fn find_next_marginalia_region(source: &str, from: usize) -> usize {
     while cursor < source.len() {
         if is_line_start(source, cursor)
             && (marginalia_slash_marker(source, cursor).is_some()
-                || source[cursor..].starts_with("```"))
+                || marginalia_fence_marker(source, cursor).is_some())
         {
             return cursor;
         }

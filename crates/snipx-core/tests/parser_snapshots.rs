@@ -1809,6 +1809,60 @@ fn non_identifier_predicates_recover_as_errors() {
 }
 
 #[test]
+fn captures_and_backticks_recover_when_used_as_subjects_or_objects() {
+    for src in [
+        "{Alice} friend Bob.",
+        "Alice friend {Bob}.",
+        "`Alice` note \"x\".",
+        "Alice note `not an object`.",
+    ] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Commentaria,
+            },
+        );
+        let statement = parsed
+            .syntax()
+            .children()
+            .find(|node| node.kind() == SyntaxKind::Statement)
+            .expect("statement");
+
+        assert_eq!(parsed.syntax().to_string(), src, "{src:?}");
+        assert!(
+            parsed
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagnosticCode::ParseError),
+            "{src:?}"
+        );
+        assert!(
+            statement
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::Error),
+            "{src:?}"
+        );
+    }
+
+    let valid = "Alice `relates to` Bob.";
+    let parsed = parse(
+        valid,
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    let predicate = parsed
+        .syntax()
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::BacktickPredicate)
+        .expect("backtick predicate");
+
+    assert!(parsed.diagnostics().is_empty());
+    assert_eq!(parsed.syntax().to_string(), valid);
+    assert_eq!(predicate.to_string(), "`relates to`");
+}
+
+#[test]
 fn boolean_literals_do_not_parse_as_predicates() {
     let invalid = parse(
         "Alice true Bob.",
@@ -1885,4 +1939,62 @@ fn unterminated_backtick_predicate_still_allows_intralinea_close() {
         .iter()
         .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedIntralineaBlock));
     assert_eq!(trailing_text.text(), " After");
+}
+
+#[test]
+fn indented_marginalia_fences_preserve_indent_and_parse_snipx_only() {
+    let snipx_src = "  ```snipx\nAlice friend Bob.\n  ```\n";
+    let parsed = parse(
+        snipx_src,
+        ParseOptions {
+            input_form: InputForm::Marginalia,
+        },
+    );
+    let fence = parsed
+        .syntax()
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::Fence)
+        .expect("fence");
+    let direct_whitespace: Vec<_> = fence
+        .children_with_tokens()
+        .filter_map(|element| element.into_token())
+        .filter(|token| token.kind() == SyntaxKind::Whitespace)
+        .map(|token| token.text().to_string())
+        .collect();
+
+    assert!(parsed.diagnostics().is_empty());
+    assert_eq!(parsed.syntax().to_string(), snipx_src);
+    assert!(fence
+        .children()
+        .any(|node| node.kind() == SyntaxKind::Statement));
+    assert!(!fence
+        .descendants_with_tokens()
+        .filter_map(|element| element.into_token())
+        .any(|token| token.kind() == SyntaxKind::FenceBody));
+    assert_eq!(direct_whitespace, ["  ", "\n", "\n", "  ", "\n"]);
+
+    let js_src = "  ```js\nconsole.log(\"not snipx\");\n  ```\n";
+    let parsed = parse(
+        js_src,
+        ParseOptions {
+            input_form: InputForm::Marginalia,
+        },
+    );
+    let fence = parsed
+        .syntax()
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::Fence)
+        .expect("fence");
+    let fence_body = fence
+        .descendants_with_tokens()
+        .filter_map(|element| element.into_token())
+        .find(|token| token.kind() == SyntaxKind::FenceBody)
+        .expect("fence body");
+
+    assert!(parsed.diagnostics().is_empty());
+    assert_eq!(parsed.syntax().to_string(), js_src);
+    assert!(!fence
+        .children()
+        .any(|node| node.kind() == SyntaxKind::Statement));
+    assert_eq!(fence_body.text(), "console.log(\"not snipx\");\n");
 }
