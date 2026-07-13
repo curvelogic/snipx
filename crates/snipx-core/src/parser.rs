@@ -1789,6 +1789,13 @@ fn find_intralinea_close(source: &str, from: usize) -> Option<usize> {
             cursor += len;
         } else if let Some(len) = intralinea_uri_literal_len(tail) {
             cursor += len;
+        } else if capture_depth > 0 && matches!(tail.chars().next(), Some('\n' | '\r')) {
+            capture_depth = 0;
+            cursor += tail
+                .chars()
+                .next()
+                .expect("tail is non-empty while cursor < source.len()")
+                .len_utf8();
         } else if capture_depth == 0 && tail.starts_with("//") {
             line_comment = true;
             cursor += 2;
@@ -1827,6 +1834,9 @@ fn intralinea_snippet_len(source: &str) -> Option<usize> {
     while cursor < source.len() {
         let tail = &source[cursor..];
         if !quoted {
+            if matches!(tail.chars().next(), Some('\n' | '\r')) {
+                return Some(cursor);
+            }
             if let Some(prefix) = intralinea_close_capture_prefix(tail, capture_depth) {
                 if prefix == 0 {
                     return Some(cursor);

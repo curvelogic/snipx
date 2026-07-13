@@ -760,6 +760,96 @@ fn intralinea_closing_recovers_after_unterminated_triple_strings() {
 }
 
 #[test]
+fn intralinea_closing_recovers_after_unterminated_snippet_before_line_comment() {
+    let src = "Before {{[unterminated\n// }} not a host close\nAlice friend Bob.}} After";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Intralinea,
+        },
+    );
+    let intralinea = parsed
+        .syntax()
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::IntralineaBlock)
+        .expect("intralinea block");
+    let line_comment = intralinea
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::LineComment)
+        .expect("line comment");
+    let trailing_text = parsed
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|element| element.into_token())
+        .filter(|token| token.kind() == SyntaxKind::IntralineaText)
+        .last()
+        .expect("trailing host text");
+    let statements: Vec<_> = intralinea
+        .children()
+        .filter(|node| node.kind() == SyntaxKind::Statement)
+        .map(|node| node.to_string())
+        .collect();
+
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert!(parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedSnippet));
+    assert!(!parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedIntralineaBlock));
+    assert_eq!(line_comment.to_string(), "// }} not a host close");
+    assert_eq!(trailing_text.text(), " After");
+    assert_eq!(statements, ["[unterminated", "Alice friend Bob."]);
+}
+
+#[test]
+fn intralinea_closing_recovers_after_unterminated_capture_before_line_comment() {
+    let src = "Before {{Alice rel {Bob\n// }} not a host close\nCarol friend Dana.}} After";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Intralinea,
+        },
+    );
+    let intralinea = parsed
+        .syntax()
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::IntralineaBlock)
+        .expect("intralinea block");
+    let line_comment = intralinea
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::LineComment)
+        .expect("line comment");
+    let trailing_text = parsed
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|element| element.into_token())
+        .filter(|token| token.kind() == SyntaxKind::IntralineaText)
+        .last()
+        .expect("trailing host text");
+    let statements: Vec<_> = intralinea
+        .children()
+        .filter(|node| node.kind() == SyntaxKind::Statement)
+        .map(|node| node.to_string())
+        .collect();
+
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert!(parsed.diagnostics().iter().any(|diagnostic| {
+        diagnostic.code == DiagnosticCode::ParseError
+            && diagnostic.message == "Unterminated capture"
+    }));
+    assert!(!parsed
+        .diagnostics()
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedIntralineaBlock));
+    assert_eq!(line_comment.to_string(), "// }} not a host close");
+    assert_eq!(trailing_text.text(), " After");
+    assert_eq!(statements, ["Alice rel {Bob", "Carol friend Dana."]);
+}
+
+#[test]
 fn numbers_do_not_consume_statement_terminators() {
     let src = "Answer value 42.\nRatio value 1.5.\n";
     let parsed = parse(
