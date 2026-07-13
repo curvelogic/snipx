@@ -1431,14 +1431,16 @@ fn unterminated_quoted_snippet_still_allows_intralinea_close() {
 
 #[test]
 fn unterminated_same_line_constructs_still_allow_intralinea_close() {
-    for (src, expected_codes) in [
+    for (src, expected_codes, expected_trailing_text) in [
         (
             "Before {{Alice note \"unterminated }} After",
             vec![DiagnosticCode::UnterminatedString],
+            " After",
         ),
         (
             "Before {{Alice `unterminated }} After",
             vec![DiagnosticCode::ParseError],
+            " After",
         ),
         (
             "Before {{[\"unterminated }} After",
@@ -1446,6 +1448,20 @@ fn unterminated_same_line_constructs_still_allow_intralinea_close() {
                 DiagnosticCode::UnterminatedString,
                 DiagnosticCode::UnterminatedSnippet,
             ],
+            " After",
+        ),
+        (
+            "Before {{Alice note \"unterminated \\}} After",
+            vec![DiagnosticCode::UnterminatedString],
+            " After",
+        ),
+        (
+            "Before {{[\"unterminated \\}} After\"",
+            vec![
+                DiagnosticCode::UnterminatedString,
+                DiagnosticCode::UnterminatedSnippet,
+            ],
+            " After\"",
         ),
     ] {
         let parsed = parse(
@@ -1479,7 +1495,7 @@ fn unterminated_same_line_constructs_still_allow_intralinea_close() {
                 .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedIntralineaBlock),
             "{src:?}"
         );
-        assert_eq!(trailing_text.text(), " After", "{src:?}");
+        assert_eq!(trailing_text.text(), expected_trailing_text, "{src:?}");
     }
 }
 

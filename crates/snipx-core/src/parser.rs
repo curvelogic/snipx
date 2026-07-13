@@ -1914,7 +1914,10 @@ fn scan_same_line_quote_boundary(
             return SameLineQuoteBoundary::LexicalClose(cursor);
         }
         if supports_escapes && ch == '\\' {
-            cursor += 1;
+            cursor += ch.len_utf8();
+            if source[cursor..].starts_with("}}") {
+                return SameLineQuoteBoundary::HostClose(cursor);
+            }
             if cursor < source.len() {
                 let next = source[cursor..]
                     .chars()
