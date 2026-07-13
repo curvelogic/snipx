@@ -1738,6 +1738,46 @@ fn standalone_quantifiers_and_punctuation_recover_as_errors() {
 }
 
 #[test]
+fn malformed_trailing_object_fragments_after_valid_objects_emit_diagnostics() {
+    for src in ["Alice friend Bob ).", "Alice friend Bob +."] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Commentaria,
+            },
+        );
+
+        assert_eq!(parsed.syntax().to_string(), src);
+        assert!(
+            parsed
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagnosticCode::ParseError),
+            "{src:?}"
+        );
+        assert!(
+            parsed
+                .syntax()
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::Error),
+            "{src:?}"
+        );
+    }
+
+    for src in ["Alice friend Bob.", "Alice friend Bob, Carol."] {
+        let parsed = parse(
+            src,
+            ParseOptions {
+                input_form: InputForm::Commentaria,
+            },
+        );
+
+        assert!(parsed.diagnostics().is_empty(), "{src:?}");
+        assert_eq!(parsed.syntax().to_string(), src);
+    }
+}
+
+#[test]
 fn predicate_synonym_with_punctuation_remains_valid() {
     let src = "Alice = <https://example.org/alice>.\n";
     let parsed = parse(
@@ -1965,6 +2005,38 @@ fn unterminated_backtick_predicate_still_allows_intralinea_close() {
         .diagnostics()
         .iter()
         .any(|diagnostic| diagnostic.code == DiagnosticCode::UnterminatedIntralineaBlock));
+    assert_eq!(trailing_text.text(), " After");
+}
+
+#[test]
+fn intralinea_uri_literals_outrank_embedded_host_close_markers() {
+    let src = "Before {{Alice source <https://example.test/a}}b>.}} After";
+    let parsed = parse(
+        src,
+        ParseOptions {
+            input_form: InputForm::Intralinea,
+        },
+    );
+    let uri = parsed
+        .syntax()
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::Uri)
+        .expect("uri literal");
+    let trailing_text = parsed
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|element| element.into_token())
+        .filter(|token| token.kind() == SyntaxKind::IntralineaText)
+        .last()
+        .expect("trailing host text");
+
+    assert_eq!(parsed.syntax().to_string(), src);
+    assert!(
+        parsed.diagnostics().is_empty(),
+        "{:?}",
+        parsed.diagnostics()
+    );
+    assert_eq!(uri.to_string(), "<https://example.test/a}}b>");
     assert_eq!(trailing_text.text(), " After");
 }
 

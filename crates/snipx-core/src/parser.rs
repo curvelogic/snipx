@@ -999,6 +999,7 @@ impl<'a> RegionParser<'a> {
     }
 
     fn parse_invalid_statement_value(&mut self) {
+        let start = self.pos;
         self.events.push(Event::Start(SyntaxKind::Error));
         match self.peek_char() {
             Some('+') | Some('*') | Some('?') => {
@@ -1016,6 +1017,12 @@ impl<'a> RegionParser<'a> {
             None => {}
         }
         self.events.push(Event::Finish);
+        self.push_diagnostic(
+            DiagnosticCode::ParseError,
+            "Unexpected token in statement value",
+            start,
+            self.pos,
+        );
     }
 
     fn parse_snippet(&mut self) {
@@ -1850,19 +1857,20 @@ fn intralinea_uri_literal_len(source: &str) -> Option<usize> {
         return None;
     }
 
+    let mut recovery_close = None;
     for (idx, ch) in chars {
         if source[idx..].starts_with("}}") {
-            return Some(idx);
+            recovery_close.get_or_insert(idx);
         }
         if ch == '>' {
             return Some(idx + 1);
         }
         if ch.is_whitespace() {
-            return Some(idx);
+            return Some(recovery_close.unwrap_or(idx));
         }
     }
 
-    Some(source.len())
+    Some(recovery_close.unwrap_or(source.len()))
 }
 
 fn leading_ws_len(text: &str) -> usize {
