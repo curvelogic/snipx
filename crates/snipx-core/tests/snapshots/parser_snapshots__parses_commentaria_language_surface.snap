@@ -1,0 +1,108 @@
+---
+source: crates/snipx-core/tests/parser_snapshots.rs
+expression: parsed.debug_tree()
+---
+ROOT
+  PROFILE_DIRECTIVE
+    AT "@"
+    IDENT "profile"
+    WHITESPACE " "
+    IDENT
+      TEXT "plain-loose"
+  WHITESPACE "\n"
+  TARGET_DIRECTIVE
+    AT "@"
+    IDENT "target"
+    WHITESPACE " "
+    URI
+      L_ANGLE "<"
+      TEXT "novel.txt"
+      R_ANGLE ">"
+  WHITESPACE "\n\n"
+  LINE_COMMENT
+    TEXT "// binding"
+  WHITESPACE "\n"
+  STATEMENT
+    SUBJECT
+      SNIPPET
+        L_BRACK "["
+        TEXT "looked at "
+        CAPTURE
+          L_BRACE "{"
+          TEXT "Alice"
+          R_BRACE "}"
+        R_BRACK "]"
+        QUANTIFIER
+          TEXT "+"
+    WHITESPACE " "
+    PREDICATE
+      IDENT
+        TEXT "is"
+    WHITESPACE " "
+    OBJECT_LIST
+      OBJECT
+        IDENT
+          TEXT "Alice"
+    DOT "."
+  WHITESPACE "\n"
+  STATEMENT
+    SUBJECT
+      IDENT
+        TEXT "Alice"
+    WHITESPACE " "
+    PREDICATE
+      BACKTICK_PREDICATE
+        BACKTICK "`"
+        TEXT "was born in"
+        BACKTICK "`"
+    WHITESPACE " "
+    OBJECT_LIST
+      OBJECT
+        IDENT
+          TEXT "Oxford"
+    SEMICOLON ";"
+    WHITESPACE "\n  "
+    PREDICATE
+      IDENT
+        TEXT "friend"
+    WHITESPACE " "
+    OBJECT_LIST
+      OBJECT
+        IDENT
+          TEXT "Bob"
+        WHITESPACE " "
+      DECORATION
+        COLON_COLON "::"
+        STRING
+          QUOTE "\""
+          TEXT "childhood friend"
+          QUOTE "\""
+      COMMA ","
+      WHITESPACE " "
+      OBJECT
+        IDENT
+          TEXT "Clara"
+    DOT "."
+  WHITESPACE "\n"
+  STATEMENT
+    SUBJECT
+      TILDE "~"
+      SNIPPET
+        L_BRACK "["
+        QUOTED_SNIPPET_PART
+          STRING
+            QUOTE "\""
+            TEXT "[Alice]"
+            QUOTE "\""
+        R_BRACK "]"
+    WHITESPACE " "
+    PREDICATE
+      IDENT
+        TEXT "italic"
+    WHITESPACE " "
+    OBJECT_LIST
+      OBJECT
+        BOOLEAN
+          TEXT "true"
+    DOT "."
+  WHITESPACE "\n"

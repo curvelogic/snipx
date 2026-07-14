@@ -1,0 +1,47 @@
+---
+source: crates/snipx-core/tests/parser_snapshots.rs
+expression: parsed.debug_tree()
+---
+ROOT
+  INTRALINEA_TEXT "Alice promised to return. "
+  INTRALINEA_BLOCK
+    L_BRACE "{"
+    L_BRACE "{"
+    STATEMENT
+      SUBJECT
+        LOCAL_SUBJECT_MARKER
+          L_ANGLE "<"
+        WHITESPACE " "
+      PREDICATE
+        IDENT
+          TEXT "a"
+      WHITESPACE " "
+      OBJECT_LIST
+        OBJECT
+          IDENT
+            TEXT "Promise"
+    R_BRACE "}"
+    R_BRACE "}"
+  INTRALINEA_TEXT " Bob waited. "
+  INTRALINEA_BLOCK
+    L_BRACE "{"
+    L_BRACE "{"
+    STATEMENT
+      SUBJECT
+        LOCAL_SUBJECT_MARKER
+          TILDE "~"
+          L_ANGLE "<"
+          R_ANGLE ">"
+        WHITESPACE " "
+      PREDICATE
+        IDENT
+          TEXT "highlight"
+      WHITESPACE " "
+      OBJECT_LIST
+        OBJECT
+          BOOLEAN
+            TEXT "true"
+      DOT "."
+    WHITESPACE " "
+    R_BRACE "}"
+    R_BRACE "}"

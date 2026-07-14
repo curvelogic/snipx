@@ -13,6 +13,12 @@ pub enum Severity {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiagnosticCode {
     ParseError,
+    UnterminatedSnippet,
+    UnterminatedString,
+    UnterminatedBlockComment,
+    UnterminatedIntralineaBlock,
+    InvalidDirectivePosition,
+    InvalidLocalSubjectMarker,
     InvalidCliUsage,
 }
 
