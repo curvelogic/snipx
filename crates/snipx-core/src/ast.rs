@@ -158,8 +158,34 @@ impl ObjectList {
 }
 
 impl Object {
-    pub fn decorations(&self) -> impl Iterator<Item = Decoration> + '_ {
-        self.syntax.children().filter_map(Decoration::cast)
+    pub fn decorations(&self) -> impl Iterator<Item = Decoration> {
+        let decorations = self
+            .syntax
+            .parent()
+            .filter(|parent| parent.kind() == SyntaxKind::ObjectList)
+            .map(|parent| {
+                let mut seen_object = false;
+                let mut decorations = Vec::new();
+
+                for child in parent.children() {
+                    if !seen_object {
+                        seen_object = child == self.syntax;
+                        continue;
+                    }
+
+                    if child.kind() == SyntaxKind::Object {
+                        break;
+                    }
+                    if let Some(decoration) = Decoration::cast(child) {
+                        decorations.push(decoration);
+                    }
+                }
+
+                decorations
+            })
+            .unwrap_or_default();
+
+        decorations.into_iter()
     }
 }
 

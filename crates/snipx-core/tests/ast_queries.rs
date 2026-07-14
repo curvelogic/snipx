@@ -71,3 +71,36 @@ fn directive_cast_accepts_all_directive_kinds() {
 
     assert_eq!(names, ["target", "profile", "custom"]);
 }
+
+#[test]
+fn object_decorations_attach_to_preceding_object() {
+    let parsed = parse(
+        "Alice friend Bob ::\"childhood\", Clara ::\"rival\".\n",
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    let root = Root::cast(parsed.syntax().clone()).expect("root wrapper");
+    let statement = root.statements().next().expect("statement");
+    let objects = statement
+        .object_list()
+        .expect("object list")
+        .objects()
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        objects
+            .iter()
+            .map(|object| {
+                object
+                    .decorations()
+                    .map(|decoration| decoration.text())
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>(),
+        [
+            vec!["::\"childhood\"".to_string()],
+            vec!["::\"rival\"".to_string()]
+        ]
+    );
+}

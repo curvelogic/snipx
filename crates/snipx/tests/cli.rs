@@ -86,6 +86,23 @@ fn agreeing_input_forms_are_allowed() {
 }
 
 #[test]
+fn repeated_agreeing_input_forms_are_allowed() {
+    for args in [
+        vec!["fmt", "-c", "-c"],
+        vec!["fmt", "--as", "commentaria", "--as", "commentaria"],
+    ] {
+        let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
+
+        command
+            .args(args)
+            .write_stdin("[Alice]   a   Character.\n")
+            .assert()
+            .success()
+            .stdout("[Alice] a Character.\n");
+    }
+}
+
+#[test]
 fn fmt_write_updates_path_in_place() {
     let mut path = std::env::temp_dir();
     let unique = SystemTime::now()

@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{ArgAction, Parser, Subcommand, ValueEnum};
 use snipx_core::{format, FormatOptions, InputForm};
 use std::fs;
 use std::io::{self, Read, Write};
@@ -23,16 +23,16 @@ enum Command {
 #[derive(Debug, Parser)]
 struct FmtArgs {
     #[arg(long = "as", value_name = "FORM")]
-    input_form: Option<CliInputForm>,
+    input_form: Vec<CliInputForm>,
 
-    #[arg(short = 'c')]
-    commentaria: bool,
+    #[arg(short = 'c', action = ArgAction::Count)]
+    commentaria: u8,
 
-    #[arg(short = 'm')]
-    marginalia: bool,
+    #[arg(short = 'm', action = ArgAction::Count)]
+    marginalia: u8,
 
-    #[arg(short = 'i')]
-    intralinea: bool,
+    #[arg(short = 'i', action = ArgAction::Count)]
+    intralinea: u8,
 
     #[arg(long)]
     write: bool,
@@ -97,16 +97,16 @@ fn run_fmt(args: FmtArgs) -> Result<(), CliError> {
 fn select_input_form(args: &FmtArgs) -> Result<InputForm, CliError> {
     let mut selected = Vec::new();
 
-    if let Some(input_form) = args.input_form {
-        selected.push(InputForm::from(input_form));
+    for input_form in &args.input_form {
+        selected.push(InputForm::from(*input_form));
     }
-    if args.commentaria {
+    for _ in 0..args.commentaria {
         selected.push(InputForm::Commentaria);
     }
-    if args.marginalia {
+    for _ in 0..args.marginalia {
         selected.push(InputForm::Marginalia);
     }
-    if args.intralinea {
+    for _ in 0..args.intralinea {
         selected.push(InputForm::Intralinea);
     }
 
