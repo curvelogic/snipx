@@ -1,0 +1,188 @@
+use crate::ast::{AstNode, Decoration, Statement};
+use crate::diagnostic::{Diagnostic, DiagnosticCode, Severity, SourceSpan};
+use crate::parser::Parse;
+use crate::syntax::{SyntaxKind, SyntaxNode};
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Value {
+    Name(String),
+    Predicate(String),
+    String(String),
+    Number(f64),
+    Boolean(bool),
+    Uri(String),
+    Snippet(String),
+    TextSpanSnippet(String),
+    WholeDocument,
+    Unresolved(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExpandedStatement {
+    pub subject: Value,
+    pub predicate: Value,
+    pub object: Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ExpandOptions {
+    pub ambient_subject: Option<Value>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExpandResult {
+    pub statements: Vec<ExpandedStatement>,
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+pub fn expand(parse: &Parse, options: ExpandOptions) -> ExpandResult {
+    let mut result = ExpandResult {
+        statements: Vec::new(),
+        diagnostics: parse.diagnostics().to_vec(),
+    };
+
+    for node in parse
+        .syntax()
+        .descendants()
+        .filter(|node| node.kind() == SyntaxKind::Statement)
+    {
+        if let Some(statement) = Statement::cast(node) {
+            expand_statement(&statement, &options, &mut result);
+        }
+    }
+
+    result
+}
+
+fn expand_statement(statement: &Statement, options: &ExpandOptions, result: &mut ExpandResult) {
+    let subject = statement
+        .subject()
+        .and_then(|subject| value_from_node(subject.syntax()))
+        .or_else(|| options.ambient_subject.clone());
+
+    let Some(subject) = subject else {
+        result.diagnostics.push(Diagnostic {
+            code: DiagnosticCode::MissingAmbientSubject,
+            severity: Severity::Error,
+            message: "Subjectless statement requires an ambient subject".to_owned(),
+            span: Some(source_span(statement.syntax())),
+            related: Vec::new(),
+        });
+        return;
+    };
+
+    for decoration in statement.decorations() {
+        push_decoration(&subject, &decoration, result);
+    }
+
+    for (predicate, object_list) in statement.predicates().zip(statement.object_lists()) {
+        let predicate = Value::Predicate(predicate_text(predicate.syntax()));
+
+        for object in object_list.objects() {
+            let Some(value) = value_from_node(object.syntax()) else {
+                continue;
+            };
+            result.statements.push(ExpandedStatement {
+                subject: subject.clone(),
+                predicate: predicate.clone(),
+                object: value.clone(),
+            });
+
+            for decoration in object.decorations() {
+                push_decoration(&value, &decoration, result);
+            }
+        }
+    }
+}
+
+fn push_decoration(subject: &Value, decoration: &Decoration, result: &mut ExpandResult) {
+    let object = decoration
+        .syntax()
+        .children()
+        .find(|child| matches!(child.kind(), SyntaxKind::String | SyntaxKind::TripleString))
+        .and_then(|node| value_from_node(&node));
+
+    let Some(object) = object else {
+        result.diagnostics.push(Diagnostic {
+            code: DiagnosticCode::InvalidDecorationTarget,
+            severity: Severity::Error,
+            message: "Decoration requires a quoted string".to_owned(),
+            span: Some(source_span(decoration.syntax())),
+            related: Vec::new(),
+        });
+        return;
+    };
+
+    result.statements.push(ExpandedStatement {
+        subject: subject.clone(),
+        predicate: Value::Predicate("note".to_owned()),
+        object,
+    });
+}
+
+fn predicate_text(node: &SyntaxNode) -> String {
+    let text = node.to_string();
+    let trimmed = text.trim();
+    trimmed
+        .strip_prefix('`')
+        .and_then(|text| text.strip_suffix('`'))
+        .unwrap_or(trimmed)
+        .to_owned()
+}
+
+fn value_from_node(node: &SyntaxNode) -> Option<Value> {
+    let value_node = node.descendants().find(|candidate| {
+        matches!(
+            candidate.kind(),
+            SyntaxKind::Snippet
+                | SyntaxKind::RangeSnippet
+                | SyntaxKind::Uri
+                | SyntaxKind::String
+                | SyntaxKind::TripleString
+                | SyntaxKind::Number
+                | SyntaxKind::Boolean
+                | SyntaxKind::Identifier
+        )
+    })?;
+    let text = value_node.to_string();
+
+    match value_node.kind() {
+        SyntaxKind::Snippet | SyntaxKind::RangeSnippet => {
+            if node.to_string().trim_start().starts_with('~') {
+                Some(Value::TextSpanSnippet(text))
+            } else {
+                Some(Value::Snippet(text))
+            }
+        }
+        SyntaxKind::Uri => Some(Value::Uri(
+            text.strip_prefix('<')
+                .and_then(|text| text.strip_suffix('>'))
+                .unwrap_or(&text)
+                .to_owned(),
+        )),
+        SyntaxKind::String => Some(Value::String(unquote(&text, 1))),
+        SyntaxKind::TripleString => Some(Value::String(unquote(&text, 3))),
+        SyntaxKind::Number => text.parse().ok().map(Value::Number),
+        SyntaxKind::Boolean => match text.as_str() {
+            "true" => Some(Value::Boolean(true)),
+            "false" => Some(Value::Boolean(false)),
+            _ => None,
+        },
+        SyntaxKind::Identifier => Some(Value::Name(text)),
+        _ => None,
+    }
+}
+
+fn unquote(text: &str, quote_width: usize) -> String {
+    text.get(quote_width..text.len().saturating_sub(quote_width))
+        .unwrap_or(text)
+        .to_owned()
+}
+
+fn source_span(node: &SyntaxNode) -> SourceSpan {
+    let range = node.text_range();
+    SourceSpan {
+        start: u32::from(range.start()) as usize,
+        end: u32::from(range.end()) as usize,
+    }
+}

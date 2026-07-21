@@ -176,6 +176,7 @@ fn parse_marginalia(source: &str) -> Parse {
                         start: cursor,
                         end: source.len(),
                     }),
+                    related: Vec::new(),
                 });
                 cursor = source.len();
             }
@@ -241,6 +242,7 @@ fn parse_intralinea(source: &str) -> Parse {
                         start,
                         end: source.len(),
                     }),
+                    related: Vec::new(),
                 });
                 events.push(Event::Finish);
                 cursor = source.len();
@@ -1550,6 +1552,7 @@ impl<'a> RegionParser<'a> {
                 start: self.offset + start,
                 end: self.offset + end,
             }),
+            related: Vec::new(),
         });
     }
 

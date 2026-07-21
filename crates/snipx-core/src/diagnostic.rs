@@ -20,6 +20,15 @@ pub enum DiagnosticCode {
     InvalidDirectivePosition,
     InvalidLocalSubjectMarker,
     InvalidCliUsage,
+    MissingAmbientSubject,
+    InvalidDecorationTarget,
+    InvalidStatementTerminator,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RelatedSpan {
+    pub message: String,
+    pub span: SourceSpan,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,4 +37,5 @@ pub struct Diagnostic {
     pub severity: Severity,
     pub message: String,
     pub span: Option<SourceSpan>,
+    pub related: Vec<RelatedSpan>,
 }
