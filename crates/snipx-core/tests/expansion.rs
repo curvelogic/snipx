@@ -90,20 +90,19 @@ fn expands_subject_and_object_decorations_to_note_statements() {
         expanded.statements[0].object,
         Value::String("protagonist".into())
     );
+    assert_eq!(expanded.statements[2].subject, Value::Name("Bob".into()));
     assert_eq!(
-        expanded.statements[2],
-        snipx_core::ExpandedStatement {
-            subject: Value::Name("Bob".into()),
-            predicate: Value::Predicate("note".into()),
-            object: Value::String("childhood friend".into()),
-        }
+        expanded.statements[2].predicate,
+        Value::Predicate("note".into())
     );
     assert_eq!(
-        expanded.statements[4],
-        snipx_core::ExpandedStatement {
-            subject: Value::Name("Clara".into()),
-            predicate: Value::Predicate("note".into()),
-            object: Value::String("rival".into()),
-        }
+        expanded.statements[2].object,
+        Value::String("childhood friend".into())
     );
+    assert_eq!(expanded.statements[4].subject, Value::Name("Clara".into()));
+    assert_eq!(
+        expanded.statements[4].predicate,
+        Value::Predicate("note".into())
+    );
+    assert_eq!(expanded.statements[4].object, Value::String("rival".into()));
 }

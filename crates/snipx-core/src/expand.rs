@@ -20,8 +20,10 @@ pub enum Value {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExpandedStatement {
     pub subject: Value,
+    pub subject_span: Option<SourceSpan>,
     pub predicate: Value,
     pub object: Value,
+    pub object_span: Option<SourceSpan>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -55,8 +57,11 @@ pub fn expand(parse: &Parse, options: ExpandOptions) -> ExpandResult {
 }
 
 fn expand_statement(statement: &Statement, options: &ExpandOptions, result: &mut ExpandResult) {
-    let subject = statement
-        .subject()
+    let explicit_subject = statement.subject();
+    let subject_span = explicit_subject
+        .as_ref()
+        .map(|subject| source_span(subject.syntax()));
+    let subject = explicit_subject
         .and_then(|subject| value_from_node(subject.syntax()))
         .or_else(|| options.ambient_subject.clone());
 
@@ -72,7 +77,7 @@ fn expand_statement(statement: &Statement, options: &ExpandOptions, result: &mut
     };
 
     for decoration in statement.decorations() {
-        push_decoration(&subject, &decoration, result);
+        push_decoration(&subject, subject_span.clone(), &decoration, result);
     }
 
     for (predicate, object_list) in statement.predicates().zip(statement.object_lists()) {
@@ -82,25 +87,33 @@ fn expand_statement(statement: &Statement, options: &ExpandOptions, result: &mut
             let Some(value) = value_from_node(object.syntax()) else {
                 continue;
             };
+            let object_span = Some(source_span(object.syntax()));
             result.statements.push(ExpandedStatement {
                 subject: subject.clone(),
+                subject_span: subject_span.clone(),
                 predicate: predicate.clone(),
                 object: value.clone(),
+                object_span: object_span.clone(),
             });
 
             for decoration in object.decorations() {
-                push_decoration(&value, &decoration, result);
+                push_decoration(&value, object_span.clone(), &decoration, result);
             }
         }
     }
 }
 
-fn push_decoration(subject: &Value, decoration: &Decoration, result: &mut ExpandResult) {
-    let object = decoration
+fn push_decoration(
+    subject: &Value,
+    subject_span: Option<SourceSpan>,
+    decoration: &Decoration,
+    result: &mut ExpandResult,
+) {
+    let object_node = decoration
         .syntax()
         .children()
-        .find(|child| matches!(child.kind(), SyntaxKind::String | SyntaxKind::TripleString))
-        .and_then(|node| value_from_node(&node));
+        .find(|child| matches!(child.kind(), SyntaxKind::String | SyntaxKind::TripleString));
+    let object = object_node.as_ref().and_then(value_from_node);
 
     let Some(object) = object else {
         result.diagnostics.push(Diagnostic {
@@ -115,8 +128,10 @@ fn push_decoration(subject: &Value, decoration: &Decoration, result: &mut Expand
 
     result.statements.push(ExpandedStatement {
         subject: subject.clone(),
+        subject_span,
         predicate: Value::Predicate("note".to_owned()),
         object,
+        object_span: object_node.as_ref().map(source_span),
     });
 }
 
@@ -148,10 +163,12 @@ fn value_from_node(node: &SyntaxNode) -> Option<Value> {
 
     match value_node.kind() {
         SyntaxKind::Snippet | SyntaxKind::RangeSnippet => {
-            if node.to_string().trim_start().starts_with('~') {
-                Some(Value::TextSpanSnippet(text))
+            let value_text = node.to_string();
+            let syntax = value_text.trim();
+            if let Some(syntax) = syntax.strip_prefix('~') {
+                Some(Value::TextSpanSnippet(syntax.to_owned()))
             } else {
-                Some(Value::Snippet(text))
+                Some(Value::Snippet(syntax.to_owned()))
             }
         }
         SyntaxKind::Uri => Some(Value::Uri(
