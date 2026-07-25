@@ -23,6 +23,10 @@ pub enum DiagnosticCode {
     MissingAmbientSubject,
     InvalidDecorationTarget,
     InvalidStatementTerminator,
+    UnsupportedProfile,
+    InvalidSnippet,
+    SnippetNotFound,
+    SnippetAmbiguous,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
