@@ -1,4 +1,4 @@
-use crate::diagnostic::{Diagnostic, DiagnosticCode, Severity};
+use crate::diagnostic::{Diagnostic, DiagnosticCode, Severity, SourceSpan};
 use crate::expand::{ExpandResult, ExpandedStatement, Value};
 use crate::r#match::{match_snippet, TextSpan};
 use crate::visible_text::{Profile, VisibleText};
@@ -11,6 +11,7 @@ pub struct ResolveOptions {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SnippetResolution {
     pub source: String,
+    pub source_span: Option<SourceSpan>,
     pub spans: Vec<TextSpan>,
 }
 
@@ -112,7 +113,11 @@ fn resolve_value(
         return;
     }
 
-    resolutions.push(SnippetResolution { source, spans });
+    resolutions.push(SnippetResolution {
+        source,
+        source_span,
+        spans,
+    });
 }
 
 #[derive(Debug, Clone, Copy)]

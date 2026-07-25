@@ -3,6 +3,17 @@ use predicates::prelude::*;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+fn temp_file(name: &str, contents: &str) -> std::path::PathBuf {
+    let mut path = std::env::temp_dir();
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock should be after epoch")
+        .as_nanos();
+    path.push(format!("snipx-cli-{name}-{unique}.txt"));
+    fs::write(&path, contents).expect("temp input should be writable");
+    path
+}
+
 #[test]
 fn help_lists_the_available_subcommands() {
     let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
@@ -130,4 +141,172 @@ fn fmt_write_updates_path_in_place() {
     fs::remove_file(&path).expect("temp input should be removable");
 
     assert_eq!(output, "[Alice] a Character.\n");
+}
+
+#[test]
+fn export_pretty_prints_partial_json_and_returns_one_for_errors() {
+    let target = temp_file("target", "Bob waited.");
+    let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
+
+    command
+        .args([
+            "export",
+            "--as",
+            "commentaria",
+            "--pretty",
+            "--target",
+            target.to_str().expect("temp path should be utf-8"),
+        ])
+        .write_stdin("[Alice] a Character.\n")
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains("\"snipxVersion\": \"0.0\""))
+        .stdout(predicate::str::contains("SNIPPET_NOT_FOUND"));
+
+    fs::remove_file(target).expect("temp target should be removable");
+}
+
+#[test]
+fn resolve_reads_source_and_target_files() {
+    let source = temp_file("source", "[Alice] a Character.\n");
+    let target = temp_file("target", "Alice waited.");
+    let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
+
+    command
+        .args([
+            "resolve",
+            "-c",
+            "--target",
+            target.to_str().expect("temp path should be utf-8"),
+            source.to_str().expect("temp path should be utf-8"),
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "\"spans\":[{\"start\":0,\"end\":5}]",
+        ));
+
+    fs::remove_file(source).expect("temp source should be removable");
+    fs::remove_file(target).expect("temp target should be removable");
+}
+
+#[test]
+fn check_returns_one_for_parse_errors_and_strict_warnings() {
+    let mut parse_error = Command::cargo_bin("snipx").expect("snipx binary should build");
+    parse_error
+        .args(["check", "-c"])
+        .write_stdin("[Alice] friend.")
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains("PARSE_ERROR"));
+
+    let mut warning = Command::cargo_bin("snipx").expect("snipx binary should build");
+    warning
+        .args(["check", "-m"])
+        .write_stdin("```\n[Alice] a Character.\n")
+        .assert()
+        .success();
+
+    let mut strict = Command::cargo_bin("snipx").expect("snipx binary should build");
+    strict
+        .args(["check", "-m", "--strict"])
+        .write_stdin("```\n[Alice] a Character.\n")
+        .assert()
+        .code(1);
+}
+
+#[test]
+fn common_cli_errors_use_documented_exit_codes() {
+    let mut usage = Command::cargo_bin("snipx").expect("snipx binary should build");
+    usage.args(["check", "-c", "-m"]).assert().code(2);
+
+    let mut missing = Command::cargo_bin("snipx").expect("snipx binary should build");
+    missing
+        .args(["check", "/definitely/missing/snipx-input"])
+        .assert()
+        .code(3);
+
+    let target = temp_file("target", "Alice waited.");
+    let mut unsupported = Command::cargo_bin("snipx").expect("snipx binary should build");
+    unsupported
+        .args([
+            "resolve",
+            "-c",
+            "--profile",
+            "markdown",
+            "--target",
+            target.to_str().expect("temp path should be utf-8"),
+        ])
+        .write_stdin("[Alice] a Character.\n")
+        .assert()
+        .code(4);
+    fs::remove_file(target).expect("temp target should be removable");
+}
+
+#[test]
+fn ambient_subject_is_available_to_marginalia_commands() {
+    let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
+
+    command
+        .args(["export", "-m", "--ambient", "[]"])
+        .write_stdin("/// a Character.\n")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"kind\":\"wholeDocument\""));
+}
+
+#[test]
+fn ambient_numbers_must_be_finite_json_numbers() {
+    for expression in ["NaN", "inf", "-inf", "Infinity", "1e999"] {
+        let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
+
+        command
+            .args(["export", "-m", "--ambient", expression])
+            .write_stdin("/// a Character.\n")
+            .assert()
+            .code(2)
+            .stderr(predicate::str::contains("ambient number must be finite"));
+    }
+}
+
+#[test]
+fn ambient_values_must_consume_one_complete_expression() {
+    for expression in ["[Alice]junk", "\"unterminated", "Alice Bob"] {
+        let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
+
+        command
+            .args(["export", "-m", "--ambient", expression])
+            .write_stdin("/// a Character.\n")
+            .assert()
+            .code(2)
+            .stderr(predicate::str::contains("invalid ambient expression"));
+    }
+}
+
+#[test]
+fn ambient_values_use_the_core_expression_grammar() {
+    for (expression, expected) in [
+        ("Alice", "\"kind\":\"name\",\"value\":\"Alice\""),
+        ("[Alice]", "\"kind\":\"snippet\",\"source\":\"[Alice]\""),
+        (
+            "~[Alice]",
+            "\"kind\":\"textSpanSnippet\",\"source\":\"[Alice]\"",
+        ),
+        (
+            "<chapter.txt>",
+            "\"kind\":\"uri\",\"value\":\"chapter.txt\"",
+        ),
+        ("\"note\"", "\"kind\":\"string\",\"value\":\"note\""),
+        ("true", "\"kind\":\"boolean\",\"value\":true"),
+        ("-1", "\"kind\":\"number\",\"value\":-1.0"),
+    ] {
+        let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
+
+        command
+            .args(["export", "-m", "--ambient", expression])
+            .write_stdin("/// a Character.\n")
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(expected));
+    }
 }

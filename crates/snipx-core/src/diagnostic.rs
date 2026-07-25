@@ -25,6 +25,7 @@ pub enum DiagnosticCode {
     InvalidStatementTerminator,
     UnsupportedProfile,
     InvalidSnippet,
+    InvalidNumber,
     SnippetNotFound,
     SnippetAmbiguous,
 }
