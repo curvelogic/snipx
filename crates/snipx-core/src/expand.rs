@@ -9,6 +9,7 @@ pub enum Value {
     Predicate(String),
     String(String),
     Number(f64),
+    InvalidNumber(String),
     Boolean(bool),
     Uri(String),
     Snippet(String),
@@ -22,8 +23,10 @@ pub struct ExpandedStatement {
     pub subject: Value,
     pub subject_span: Option<SourceSpan>,
     pub predicate: Value,
+    pub predicate_span: Option<SourceSpan>,
     pub object: Value,
     pub object_span: Option<SourceSpan>,
+    pub statement_span: SourceSpan,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -57,6 +60,7 @@ pub fn expand(parse: &Parse, options: ExpandOptions) -> ExpandResult {
 }
 
 fn expand_statement(statement: &Statement, options: &ExpandOptions, result: &mut ExpandResult) {
+    let statement_span = source_span(statement.syntax());
     let explicit_subject = statement.subject();
     let subject_span = explicit_subject
         .as_ref()
@@ -75,12 +79,14 @@ fn expand_statement(statement: &Statement, options: &ExpandOptions, result: &mut
         });
         return;
     };
+    diagnose_invalid_number(&subject, subject_span.clone(), result);
 
     for decoration in statement.decorations() {
         push_decoration(&subject, subject_span.clone(), &decoration, result);
     }
 
     for (predicate, object_list) in statement.predicates().zip(statement.object_lists()) {
+        let predicate_span = Some(source_span(predicate.syntax()));
         let predicate = Value::Predicate(predicate_text(predicate.syntax()));
 
         for object in object_list.objects() {
@@ -88,12 +94,15 @@ fn expand_statement(statement: &Statement, options: &ExpandOptions, result: &mut
                 continue;
             };
             let object_span = Some(source_span(object.syntax()));
+            diagnose_invalid_number(&value, object_span.clone(), result);
             result.statements.push(ExpandedStatement {
                 subject: subject.clone(),
                 subject_span: subject_span.clone(),
                 predicate: predicate.clone(),
+                predicate_span: predicate_span.clone(),
                 object: value.clone(),
                 object_span: object_span.clone(),
+                statement_span: statement_span.clone(),
             });
 
             for decoration in object.decorations() {
@@ -130,8 +139,10 @@ fn push_decoration(
         subject: subject.clone(),
         subject_span,
         predicate: Value::Predicate("note".to_owned()),
+        predicate_span: None,
         object,
         object_span: object_node.as_ref().map(source_span),
+        statement_span: source_span(decoration.syntax()),
     });
 }
 
@@ -179,7 +190,13 @@ fn value_from_node(node: &SyntaxNode) -> Option<Value> {
         )),
         SyntaxKind::String => Some(Value::String(unquote(&text, 1))),
         SyntaxKind::TripleString => Some(Value::String(unquote(&text, 3))),
-        SyntaxKind::Number => text.parse().ok().map(Value::Number),
+        SyntaxKind::Number => text.parse().ok().map(|number: f64| {
+            if number.is_finite() {
+                Value::Number(number)
+            } else {
+                Value::InvalidNumber(text)
+            }
+        }),
         SyntaxKind::Boolean => match text.as_str() {
             "true" => Some(Value::Boolean(true)),
             "false" => Some(Value::Boolean(false)),
@@ -187,6 +204,18 @@ fn value_from_node(node: &SyntaxNode) -> Option<Value> {
         },
         SyntaxKind::Identifier => Some(Value::Name(text)),
         _ => None,
+    }
+}
+
+fn diagnose_invalid_number(value: &Value, span: Option<SourceSpan>, result: &mut ExpandResult) {
+    if let Value::InvalidNumber(source) = value {
+        result.diagnostics.push(Diagnostic {
+            code: DiagnosticCode::InvalidNumber,
+            severity: Severity::Error,
+            message: format!("JSON number is outside the finite range: {source}"),
+            span,
+            related: Vec::new(),
+        });
     }
 }
 
