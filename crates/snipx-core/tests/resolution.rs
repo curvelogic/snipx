@@ -22,6 +22,44 @@ fn plain_visible_text_is_nfc_normalised() {
 }
 
 #[test]
+fn markdown_extracts_rendered_visible_text() {
+    let source = concat!(
+        "# Heading\n\n",
+        "> Alice [opened](door.html) the door.\n\n",
+        "- first item\n- `second` item\n\n",
+        "```text\ncode block\n```\n\n",
+        "![threshold](door.png)\n\n",
+        "[reference]: hidden.html\n",
+    );
+    let visible = extract_visible_text(source, Profile::Markdown).unwrap();
+
+    assert_eq!(
+        visible.text,
+        "Heading\nAlice opened the door.\nfirst item\nsecond item\ncode block\nthreshold\n"
+    );
+    assert!(visible.diagnostics.is_empty());
+    assert!(!visible.text.contains("door.html"));
+    assert!(!visible.text.contains("door.png"));
+    assert!(!visible.text.contains("hidden.html"));
+}
+
+#[test]
+fn markdown_omits_raw_html_with_source_located_warnings() {
+    let source = "Before <span>Alice</span>.\n\n<div>\nHidden\n</div>\n";
+    let visible = extract_visible_text(source, Profile::Markdown).unwrap();
+
+    assert_eq!(visible.text, "Before Alice.\n");
+    assert!(!visible.text.contains("<span>"));
+    assert!(!visible.text.contains("Hidden"));
+    assert!(!visible.diagnostics.is_empty());
+    assert!(visible.diagnostics.iter().all(|diagnostic| {
+        diagnostic.code == DiagnosticCode::RawHtmlOmitted
+            && diagnostic.severity == snipx_core::Severity::Warning
+            && diagnostic.span.is_some()
+    }));
+}
+
+#[test]
 fn exact_matching_returns_unicode_scalar_offsets() {
     let visible = extract_visible_text("é Alice Alice", Profile::Plain).unwrap();
     let spans = match_snippet("Alice", &visible, Profile::Plain).unwrap();

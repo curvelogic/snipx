@@ -360,6 +360,7 @@ fn diagnostic_code(code: DiagnosticCode) -> &'static str {
         DiagnosticCode::InvalidDecorationTarget => "INVALID_DECORATION_TARGET",
         DiagnosticCode::InvalidStatementTerminator => "INVALID_STATEMENT_TERMINATOR",
         DiagnosticCode::UnsupportedProfile => "UNSUPPORTED_PROFILE",
+        DiagnosticCode::RawHtmlOmitted => "RAW_HTML_OMITTED",
         DiagnosticCode::InvalidSnippet => "INVALID_SNIPPET",
         DiagnosticCode::InvalidNumber => "INVALID_NUMBER",
         DiagnosticCode::SnippetNotFound => "SNIPPET_NOT_FOUND",
