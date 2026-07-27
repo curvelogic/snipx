@@ -1,4 +1,4 @@
-use pulldown_cmark::{Event, Parser, TagEnd};
+use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 use unicode_normalization::UnicodeNormalization;
 
 use crate::diagnostic::{Diagnostic, DiagnosticCode, Severity, SourceSpan};
@@ -39,6 +39,14 @@ fn extract_markdown(source: &str, profile: Profile) -> VisibleText {
         match event {
             Event::Text(value) | Event::Code(value) => text.push_str(&value),
             Event::SoftBreak | Event::HardBreak => push_newline(&mut text),
+            Event::Start(
+                Tag::Paragraph
+                | Tag::Heading { .. }
+                | Tag::BlockQuote(_)
+                | Tag::CodeBlock(_)
+                | Tag::Item
+                | Tag::TableRow,
+            ) => push_newline(&mut text),
             Event::End(
                 TagEnd::Paragraph
                 | TagEnd::Heading(_)

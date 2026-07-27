@@ -44,6 +44,27 @@ fn markdown_extracts_rendered_visible_text() {
 }
 
 #[test]
+fn markdown_separates_tight_nested_list_items() {
+    let visible = extract_visible_text("- one\n  - two\n- three\n", Profile::Markdown).unwrap();
+
+    assert_eq!(visible.text, "one\ntwo\nthree\n");
+}
+
+#[test]
+fn markdown_separates_block_quote_nested_in_tight_list_item() {
+    let visible = extract_visible_text("- one\n  > two\n- three\n", Profile::Markdown).unwrap();
+
+    assert_eq!(visible.text, "one\ntwo\nthree\n");
+}
+
+#[test]
+fn markdown_separates_heading_nested_in_tight_list_item() {
+    let visible = extract_visible_text("- one\n  # two\n- three\n", Profile::Markdown).unwrap();
+
+    assert_eq!(visible.text, "one\ntwo\nthree\n");
+}
+
+#[test]
 fn markdown_omits_raw_html_with_source_located_warnings() {
     let source = "Before <span>Alice</span>.\n\n<div>\nHidden\n</div>\n";
     let visible = extract_visible_text(source, Profile::Markdown).unwrap();
