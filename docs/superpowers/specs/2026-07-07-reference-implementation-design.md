@@ -210,6 +210,22 @@ inline code text, link text, and image alt text are visible; link and
 image destinations, reference definitions, and raw HTML tags are not
 visible.
 
+Use the `pulldown-cmark` event stream rather than rendering through HTML
+or maintaining a custom Markdown scanner. Block boundaries become
+deterministic newline boundaries in the canonical visible-text stream;
+the stored stream remains NFC-normalised without loose matching
+transformations. `markdown` uses exact matching over that stream, while
+`markdown-loose` applies the same loose normalisation used by
+`plain-loose` during matching so reported spans continue to address the
+stored canonical stream.
+
+Visible-text extraction carries non-fatal diagnostics. Inline raw HTML
+tags are omitted while Markdown text between them remains visible.
+Opaque raw HTML blocks are omitted and produce source-located warnings
+because extracting their rendered text would require an HTML renderer.
+These warnings are included in canonical JSON; they do not change the
+normal exit code unless `--strict` is supplied.
+
 ### 8. Beads Issue Structure
 
 Represent implementation work in Beads. Create parent epics for the
