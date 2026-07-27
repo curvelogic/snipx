@@ -21,16 +21,6 @@ pub fn match_snippet(
     visible_text: &VisibleText,
     profile: Profile,
 ) -> Result<Vec<TextSpan>, Diagnostic> {
-    match profile {
-        Profile::Plain | Profile::PlainLoose => {}
-        Profile::Markdown | Profile::MarkdownLoose => {
-            return Err(invalid(
-                DiagnosticCode::UnsupportedProfile,
-                "Markdown matching is not implemented",
-            ));
-        }
-    }
-
     if let Some(separator) = range_separator(snippet_body)? {
         if has_unquoted_capture(snippet_body) {
             return Err(invalid(
@@ -50,7 +40,7 @@ fn match_capture(
     profile: Profile,
 ) -> Result<Vec<TextSpan>, Diagnostic> {
     let (pattern, capture) = strip_capture(body)?;
-    let loose = profile == Profile::PlainLoose;
+    let loose = matches!(profile, Profile::PlainLoose | Profile::MarkdownLoose);
     let haystack = normalize(&visible_text.text, loose);
     let needle = normalize(&unquote(&pattern), loose);
 

@@ -206,6 +206,34 @@ fn loose_expansions_do_not_create_duplicate_source_spans() {
 }
 
 #[test]
+fn markdown_profiles_resolve_against_rendered_text() {
+    let exact = extract_visible_text(
+        "# Café\n\nAlice **opened** the file.\n",
+        Profile::Markdown,
+    )
+    .unwrap();
+    assert_eq!(
+        match_snippet("Alice opened", &exact, Profile::Markdown).unwrap(),
+        vec![TextSpan { start: 5, end: 17 }]
+    );
+
+    let loose = extract_visible_text(
+        "Alice\u{2014}opened\n\nthe \u{fb01}le.",
+        Profile::MarkdownLoose,
+    )
+    .unwrap();
+    assert_eq!(
+        match_snippet(
+            "Alice-opened the file",
+            &loose,
+            Profile::MarkdownLoose,
+        )
+        .unwrap(),
+        vec![TextSpan { start: 0, end: 20 }]
+    );
+}
+
+#[test]
 fn expansion_preserves_snippet_quantifiers_for_resolution() {
     let expanded = expand_commentaria("[Alice]+ a Character.\n");
 
