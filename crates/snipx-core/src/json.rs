@@ -169,6 +169,7 @@ pub fn export_json(request: ExportRequest) -> ExportDocument {
     let (statements, resolutions, mut diagnostics) = if let Some(target_text) = target_text {
         match extract_visible_text(&target_text, request.profile) {
             Ok(visible) => {
+                let extraction_diagnostics = visible.diagnostics.clone();
                 let resolved = resolve(
                     &expanded,
                     &visible,
@@ -183,7 +184,11 @@ pub fn export_json(request: ExportRequest) -> ExportDocument {
                 (
                     resolved.statements,
                     resolved.resolutions,
-                    resolved.diagnostics,
+                    resolved
+                        .diagnostics
+                        .into_iter()
+                        .chain(extraction_diagnostics)
+                        .collect(),
                 )
             }
             Err(diagnostic) => {
