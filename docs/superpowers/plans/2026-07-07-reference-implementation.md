@@ -1586,6 +1586,7 @@ Expected: tests pass and commit succeeds.
 - Create: `fuzz/Cargo.toml`
 - Create: `fuzz/fuzz_targets/parser.rs`
 - Modify: `.github/workflows/ci.yml`
+- Modify: `docs/superpowers/plans/2026-07-07-reference-implementation.md`
 
 **Interfaces:**
 - Consumes: parser and formatter APIs.
@@ -1682,9 +1683,16 @@ fuzz_target!(|data: &[u8]| {
 
 - [ ] **Step 3: Add CI smoke check**
 
-Modify `.github/workflows/ci.yml` to install `cargo-fuzz` and build the fuzz target without running an unbounded fuzz campaign:
+Modify `.github/workflows/ci.yml` to add a separate nightly job that installs
+`cargo-fuzz` and builds the fuzz target without running an unbounded fuzz
+campaign. Keep the existing format, clippy, and test job on stable Rust:
 
 ```yaml
+  fuzz-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
       - run: cargo install cargo-fuzz --locked
       - run: cargo fuzz build parser
 ```
@@ -1695,9 +1703,9 @@ Run:
 
 ```bash
 cargo test -p snipx-core --test parser_properties
-cargo fuzz build parser
+cargo +nightly fuzz build parser
 cargo test --workspace --all-features
-git add crates/snipx-core fuzz .github/workflows/ci.yml
+git add crates/snipx-core fuzz .github/workflows/ci.yml docs/superpowers/plans/2026-07-07-reference-implementation.md
 git commit -m "Add parser property tests and fuzzing"
 ```
 

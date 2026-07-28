@@ -4,6 +4,7 @@ members = [
   "crates/snipx-core",
   "crates/snipx",
 ]
+exclude = ["fuzz"]
 
 [workspace.package]
 edition = "2021"
