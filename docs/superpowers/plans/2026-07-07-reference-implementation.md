@@ -1485,6 +1485,12 @@ Expected: tests pass and commit succeeds.
 
 ### Task 9: Implement Markdown Visible Text Extraction
 
+> Detailed execution plan: `docs/superpowers/plans/2026-07-25-markdown-visible-text.md`.
+> It incorporates the approved raw-HTML warning policy, Markdown matcher
+> behavior, canonical JSON propagation, and CLI enablement.
+> It supersedes the outline steps below wherever their implementation
+> mechanics differ.
+
 **Files:**
 - Modify: `crates/snipx-core/Cargo.toml`
 - Modify: `crates/snipx-core/src/visible_text.rs`

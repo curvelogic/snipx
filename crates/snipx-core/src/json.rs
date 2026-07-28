@@ -169,6 +169,7 @@ pub fn export_json(request: ExportRequest) -> ExportDocument {
     let (statements, resolutions, mut diagnostics) = if let Some(target_text) = target_text {
         match extract_visible_text(&target_text, request.profile) {
             Ok(visible) => {
+                let extraction_diagnostics = visible.diagnostics.clone();
                 let resolved = resolve(
                     &expanded,
                     &visible,
@@ -183,7 +184,11 @@ pub fn export_json(request: ExportRequest) -> ExportDocument {
                 (
                     resolved.statements,
                     resolved.resolutions,
-                    resolved.diagnostics,
+                    resolved
+                        .diagnostics
+                        .into_iter()
+                        .chain(extraction_diagnostics)
+                        .collect(),
                 )
             }
             Err(diagnostic) => {
@@ -360,6 +365,7 @@ fn diagnostic_code(code: DiagnosticCode) -> &'static str {
         DiagnosticCode::InvalidDecorationTarget => "INVALID_DECORATION_TARGET",
         DiagnosticCode::InvalidStatementTerminator => "INVALID_STATEMENT_TERMINATOR",
         DiagnosticCode::UnsupportedProfile => "UNSUPPORTED_PROFILE",
+        DiagnosticCode::RawHtmlOmitted => "RAW_HTML_OMITTED",
         DiagnosticCode::InvalidSnippet => "INVALID_SNIPPET",
         DiagnosticCode::InvalidNumber => "INVALID_NUMBER",
         DiagnosticCode::SnippetNotFound => "SNIPPET_NOT_FOUND",

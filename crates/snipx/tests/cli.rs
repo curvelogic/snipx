@@ -225,22 +225,49 @@ fn common_cli_errors_use_documented_exit_codes() {
         .args(["check", "/definitely/missing/snipx-input"])
         .assert()
         .code(3);
+}
 
-    let target = temp_file("target", "Alice waited.");
-    let mut unsupported = Command::cargo_bin("snipx").expect("snipx binary should build");
-    unsupported
+#[test]
+fn cli_resolves_markdown_and_strict_mode_rejects_html_warnings() {
+    let source = temp_file("markdown-source", "[Alice] a Character.\n");
+    let clean_target = temp_file("markdown-target", "# Alice\n\nShe waited.\n");
+    let html_target = temp_file("markdown-html-target", "Alice <span>waited</span>.\n");
+
+    let mut clean = Command::cargo_bin("snipx").expect("snipx binary should build");
+    clean
         .args([
             "resolve",
             "-c",
             "--profile",
             "markdown",
             "--target",
-            target.to_str().expect("temp path should be utf-8"),
+            clean_target.to_str().expect("temp path should be utf-8"),
+            source.to_str().expect("temp path should be utf-8"),
         ])
-        .write_stdin("[Alice] a Character.\n")
         .assert()
-        .code(4);
-    fs::remove_file(target).expect("temp target should be removable");
+        .success()
+        .stdout(predicate::str::contains("\"profile\":\"markdown\""))
+        .stdout(predicate::str::contains("\"start\":0,\"end\":5"));
+
+    let mut warning = Command::cargo_bin("snipx").expect("snipx binary should build");
+    warning
+        .args([
+            "export",
+            "-c",
+            "--profile",
+            "markdown",
+            "--strict",
+            "--target",
+            html_target.to_str().expect("temp path should be utf-8"),
+            source.to_str().expect("temp path should be utf-8"),
+        ])
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains("RAW_HTML_OMITTED"));
+
+    for path in [source, clean_target, html_target] {
+        fs::remove_file(path).expect("temp input should be removable");
+    }
 }
 
 #[test]

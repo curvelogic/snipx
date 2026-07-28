@@ -24,6 +24,7 @@ pub enum DiagnosticCode {
     InvalidDecorationTarget,
     InvalidStatementTerminator,
     UnsupportedProfile,
+    RawHtmlOmitted,
     InvalidSnippet,
     InvalidNumber,
     SnippetNotFound,

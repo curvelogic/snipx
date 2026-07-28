@@ -22,6 +22,65 @@ fn plain_visible_text_is_nfc_normalised() {
 }
 
 #[test]
+fn markdown_extracts_rendered_visible_text() {
+    let source = concat!(
+        "# Heading\n\n",
+        "> Alice [opened](door.html) the door.\n\n",
+        "- first item\n- `second` item\n\n",
+        "```text\ncode block\n```\n\n",
+        "![threshold](door.png)\n\n",
+        "[reference]: hidden.html\n",
+    );
+    let visible = extract_visible_text(source, Profile::Markdown).unwrap();
+
+    assert_eq!(
+        visible.text,
+        "Heading\nAlice opened the door.\nfirst item\nsecond item\ncode block\nthreshold\n"
+    );
+    assert!(visible.diagnostics.is_empty());
+    assert!(!visible.text.contains("door.html"));
+    assert!(!visible.text.contains("door.png"));
+    assert!(!visible.text.contains("hidden.html"));
+}
+
+#[test]
+fn markdown_separates_tight_nested_list_items() {
+    let visible = extract_visible_text("- one\n  - two\n- three\n", Profile::Markdown).unwrap();
+
+    assert_eq!(visible.text, "one\ntwo\nthree\n");
+}
+
+#[test]
+fn markdown_separates_block_quote_nested_in_tight_list_item() {
+    let visible = extract_visible_text("- one\n  > two\n- three\n", Profile::Markdown).unwrap();
+
+    assert_eq!(visible.text, "one\ntwo\nthree\n");
+}
+
+#[test]
+fn markdown_separates_heading_nested_in_tight_list_item() {
+    let visible = extract_visible_text("- one\n  # two\n- three\n", Profile::Markdown).unwrap();
+
+    assert_eq!(visible.text, "one\ntwo\nthree\n");
+}
+
+#[test]
+fn markdown_omits_raw_html_with_source_located_warnings() {
+    let source = "Before <span>Alice</span>.\n\n<div>\nHidden\n</div>\n";
+    let visible = extract_visible_text(source, Profile::Markdown).unwrap();
+
+    assert_eq!(visible.text, "Before Alice.\n");
+    assert!(!visible.text.contains("<span>"));
+    assert!(!visible.text.contains("Hidden"));
+    assert!(!visible.diagnostics.is_empty());
+    assert!(visible.diagnostics.iter().all(|diagnostic| {
+        diagnostic.code == DiagnosticCode::RawHtmlOmitted
+            && diagnostic.severity == snipx_core::Severity::Warning
+            && diagnostic.span.is_some()
+    }));
+}
+
+#[test]
 fn exact_matching_returns_unicode_scalar_offsets() {
     let visible = extract_visible_text("é Alice Alice", Profile::Plain).unwrap();
     let spans = match_snippet("Alice", &visible, Profile::Plain).unwrap();
@@ -164,6 +223,26 @@ fn loose_expansions_do_not_create_duplicate_source_spans() {
     assert_eq!(
         match_snippet("f", &visible, Profile::PlainLoose).unwrap(),
         vec![TextSpan { start: 0, end: 1 }]
+    );
+}
+
+#[test]
+fn markdown_profiles_resolve_against_rendered_text() {
+    let exact =
+        extract_visible_text("# Café\n\nAlice **opened** the file.\n", Profile::Markdown).unwrap();
+    assert_eq!(
+        match_snippet("Alice opened", &exact, Profile::Markdown).unwrap(),
+        vec![TextSpan { start: 5, end: 17 }]
+    );
+
+    let loose = extract_visible_text(
+        "Alice\u{2014}opened\n\nthe \u{fb01}le.",
+        Profile::MarkdownLoose,
+    )
+    .unwrap();
+    assert_eq!(
+        match_snippet("Alice-opened the file", &loose, Profile::MarkdownLoose,).unwrap(),
+        vec![TextSpan { start: 0, end: 20 }]
     );
 }
 

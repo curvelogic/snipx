@@ -217,3 +217,32 @@ fn overflowing_source_number_preserves_its_lexeme_and_span() {
         json!({"start": 12, "end": 412})
     );
 }
+
+#[test]
+fn markdown_export_includes_non_fatal_extraction_warnings() {
+    let document = export_json(ExportRequest {
+        source: "[Alice] a Character.\n".to_owned(),
+        input_form: InputForm::Commentaria,
+        target_text: Some("Alice <span>waited</span>.\n".to_owned()),
+        profile: Profile::Markdown,
+        path: None,
+        target_uri: Some("chapter.md".to_owned()),
+        ambient_subject: None,
+    });
+    let value = serde_json::to_value(document).unwrap();
+
+    assert_eq!(value["target"]["profile"], "markdown");
+    assert_eq!(
+        value["resolutions"][0]["spans"][0],
+        json!({"start": 0, "end": 5})
+    );
+    assert!(value["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|diagnostic| {
+            diagnostic["code"] == "RAW_HTML_OMITTED"
+                && diagnostic["severity"] == "warning"
+                && diagnostic["span"].is_object()
+        }));
+}

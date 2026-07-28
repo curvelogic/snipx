@@ -130,11 +130,6 @@ fn run() -> Result<u8, CliError> {
 fn run_document(args: DocumentArgs) -> Result<u8, CliError> {
     let input_form = select_input_form(&args.input)?;
     let profile = Profile::from(args.profile);
-    if matches!(profile, Profile::Markdown | Profile::MarkdownLoose) {
-        return Err(CliError::unsupported(
-            "markdown profiles are not implemented",
-        ));
-    }
 
     let source_uses_stdin = args
         .path
@@ -328,6 +323,7 @@ impl CliError {
         }
     }
 
+    #[allow(dead_code)] // Reserved for stable unsupported-feature diagnostics (exit code 4).
     fn unsupported(message: impl Into<String>) -> Self {
         Self {
             code: 4,
