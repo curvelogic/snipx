@@ -1617,9 +1617,13 @@ proptest! {
     }
 
     #[test]
-    fn formatted_commentaria_is_parseable(source in ".*") {
+    fn formatted_commentaria_preserves_diagnostics(source in ".*") {
         let formatted = format(&source, FormatOptions { input_form: InputForm::Commentaria });
-        let _ = parse(&formatted.output, ParseOptions { input_form: InputForm::Commentaria });
+        let reparsed = parse(
+            &formatted.output,
+            ParseOptions { input_form: InputForm::Commentaria },
+        );
+        prop_assert_eq!(reparsed.diagnostics(), formatted.diagnostics.as_slice());
     }
 }
 ```
@@ -1630,7 +1634,10 @@ Run:
 cargo test -p snipx-core --test parser_properties
 ```
 
-Expected: PASS after parser and formatter are robust enough; failures become parser or formatter fixes.
+Expected: PASS after parser and formatter are robust enough. The no-panic
+properties cover all input forms, while the format/reparse property proves
+that formatting does not change the diagnostic result. Failures become parser
+or formatter fixes and are promoted to fixtures.
 
 - [ ] **Step 2: Add fuzz harness**
 
@@ -1675,7 +1682,11 @@ fuzz_target!(|data: &[u8]| {
         ] {
             let _ = parse(source, ParseOptions { input_form });
             let formatted = format(source, FormatOptions { input_form });
-            let _ = parse(&formatted.output, ParseOptions { input_form });
+            let reparsed = parse(&formatted.output, ParseOptions { input_form });
+            assert_eq!(
+                reparsed.diagnostics(),
+                formatted.diagnostics.as_slice(),
+            );
         }
     }
 });

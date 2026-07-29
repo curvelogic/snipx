@@ -12,7 +12,8 @@ fuzz_target!(|data: &[u8]| {
         ] {
             let _ = parse(source, ParseOptions { input_form });
             let formatted = format(source, FormatOptions { input_form });
-            let _ = parse(&formatted.output, ParseOptions { input_form });
+            let reparsed = parse(&formatted.output, ParseOptions { input_form });
+            assert_eq!(reparsed.diagnostics(), formatted.diagnostics.as_slice(),);
         }
     }
 });

@@ -18,8 +18,12 @@ proptest! {
     }
 
     #[test]
-    fn formatted_commentaria_is_parseable(source in ".*") {
+    fn formatted_commentaria_preserves_diagnostics(source in ".*") {
         let formatted = format(&source, FormatOptions { input_form: InputForm::Commentaria });
-        let _ = parse(&formatted.output, ParseOptions { input_form: InputForm::Commentaria });
+        let reparsed = parse(
+            &formatted.output,
+            ParseOptions { input_form: InputForm::Commentaria },
+        );
+        prop_assert_eq!(reparsed.diagnostics(), formatted.diagnostics.as_slice());
     }
 }
