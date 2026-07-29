@@ -1585,6 +1585,7 @@ Expected: tests pass and commit succeeds.
 - Modify: `crates/snipx-core/tests/parser_properties.rs`
 - Create: `fuzz/Cargo.toml`
 - Create: `fuzz/fuzz_targets/parser.rs`
+- Create: `fuzz/.gitignore`
 - Modify: `.github/workflows/ci.yml`
 - Modify: `docs/superpowers/plans/2026-07-07-reference-implementation.md`
 
@@ -1602,22 +1603,22 @@ use snipx_core::{format, parse, FormatOptions, InputForm, ParseOptions};
 
 proptest! {
     #[test]
-    fn parsing_commentaria_never_panics(source in ".*") {
+    fn parsing_commentaria_never_panics(source in "(?s:.*)") {
         let _ = parse(&source, ParseOptions { input_form: InputForm::Commentaria });
     }
 
     #[test]
-    fn parsing_marginalia_never_panics(source in ".*") {
+    fn parsing_marginalia_never_panics(source in "(?s:.*)") {
         let _ = parse(&source, ParseOptions { input_form: InputForm::Marginalia });
     }
 
     #[test]
-    fn parsing_intralinea_never_panics(source in ".*") {
+    fn parsing_intralinea_never_panics(source in "(?s:.*)") {
         let _ = parse(&source, ParseOptions { input_form: InputForm::Intralinea });
     }
 
     #[test]
-    fn formatted_commentaria_preserves_diagnostics(source in ".*") {
+    fn formatted_commentaria_preserves_diagnostics(source in "(?s:.*)") {
         let formatted = format(&source, FormatOptions { input_form: InputForm::Commentaria });
         let reparsed = parse(
             &formatted.output,
@@ -1634,8 +1635,8 @@ Run:
 cargo test -p snipx-core --test parser_properties
 ```
 
-Expected: PASS after parser and formatter are robust enough. The no-panic
-properties cover all input forms, while the format/reparse property proves
+Expected: PASS after parser and formatter are robust enough. The multiline-capable
+no-panic properties cover all input forms, while the format/reparse property proves
 that formatting does not change the diagnostic result. Failures become parser
 or formatter fixes and are promoted to fixtures.
 
@@ -1691,6 +1692,18 @@ fuzz_target!(|data: &[u8]| {
     }
 });
 ```
+
+Create `fuzz/.gitignore`:
+
+```gitignore
+target
+corpus
+artifacts
+coverage
+```
+
+This keeps cargo-fuzz runtime outputs out of version control while retaining the
+fuzz harness and manifest.
 
 - [ ] **Step 3: Add CI smoke check**
 
