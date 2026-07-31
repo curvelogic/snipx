@@ -1585,7 +1585,9 @@ Expected: tests pass and commit succeeds.
 - Modify: `crates/snipx-core/tests/parser_properties.rs`
 - Create: `fuzz/Cargo.toml`
 - Create: `fuzz/fuzz_targets/parser.rs`
+- Create: `fuzz/.gitignore`
 - Modify: `.github/workflows/ci.yml`
+- Modify: `docs/superpowers/plans/2026-07-07-reference-implementation.md`
 
 **Interfaces:**
 - Consumes: parser and formatter APIs.
@@ -1601,24 +1603,28 @@ use snipx_core::{format, parse, FormatOptions, InputForm, ParseOptions};
 
 proptest! {
     #[test]
-    fn parsing_commentaria_never_panics(source in ".*") {
+    fn parsing_commentaria_never_panics(source in "(?s:.*)") {
         let _ = parse(&source, ParseOptions { input_form: InputForm::Commentaria });
     }
 
     #[test]
-    fn parsing_marginalia_never_panics(source in ".*") {
+    fn parsing_marginalia_never_panics(source in "(?s:.*)") {
         let _ = parse(&source, ParseOptions { input_form: InputForm::Marginalia });
     }
 
     #[test]
-    fn parsing_intralinea_never_panics(source in ".*") {
+    fn parsing_intralinea_never_panics(source in "(?s:.*)") {
         let _ = parse(&source, ParseOptions { input_form: InputForm::Intralinea });
     }
 
     #[test]
-    fn formatted_commentaria_is_parseable(source in ".*") {
+    fn formatted_commentaria_preserves_diagnostics(source in "(?s:.*)") {
         let formatted = format(&source, FormatOptions { input_form: InputForm::Commentaria });
-        let _ = parse(&formatted.output, ParseOptions { input_form: InputForm::Commentaria });
+        let reparsed = parse(
+            &formatted.output,
+            ParseOptions { input_form: InputForm::Commentaria },
+        );
+        prop_assert_eq!(reparsed.diagnostics(), formatted.diagnostics.as_slice());
     }
 }
 ```
@@ -1629,7 +1635,10 @@ Run:
 cargo test -p snipx-core --test parser_properties
 ```
 
-Expected: PASS after parser and formatter are robust enough; failures become parser or formatter fixes.
+Expected: PASS after parser and formatter are robust enough. The multiline-capable
+no-panic properties cover all input forms, while the format/reparse property proves
+that formatting does not change the diagnostic result. Failures become parser
+or formatter fixes and are promoted to fixtures.
 
 - [ ] **Step 2: Add fuzz harness**
 
@@ -1674,17 +1683,40 @@ fuzz_target!(|data: &[u8]| {
         ] {
             let _ = parse(source, ParseOptions { input_form });
             let formatted = format(source, FormatOptions { input_form });
-            let _ = parse(&formatted.output, ParseOptions { input_form });
+            let reparsed = parse(&formatted.output, ParseOptions { input_form });
+            assert_eq!(
+                reparsed.diagnostics(),
+                formatted.diagnostics.as_slice(),
+            );
         }
     }
 });
 ```
 
+Create `fuzz/.gitignore`:
+
+```gitignore
+target
+corpus
+artifacts
+coverage
+```
+
+This keeps cargo-fuzz runtime outputs out of version control while retaining the
+fuzz harness and manifest.
+
 - [ ] **Step 3: Add CI smoke check**
 
-Modify `.github/workflows/ci.yml` to install `cargo-fuzz` and build the fuzz target without running an unbounded fuzz campaign:
+Modify `.github/workflows/ci.yml` to add a separate nightly job that installs
+`cargo-fuzz` and builds the fuzz target without running an unbounded fuzz
+campaign. Keep the existing format, clippy, and test job on stable Rust:
 
 ```yaml
+  fuzz-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
       - run: cargo install cargo-fuzz --locked
       - run: cargo fuzz build parser
 ```
@@ -1695,9 +1727,9 @@ Run:
 
 ```bash
 cargo test -p snipx-core --test parser_properties
-cargo fuzz build parser
+cargo +nightly fuzz build parser
 cargo test --workspace --all-features
-git add crates/snipx-core fuzz .github/workflows/ci.yml
+git add crates/snipx-core fuzz .github/workflows/ci.yml docs/superpowers/plans/2026-07-07-reference-implementation.md
 git commit -m "Add parser property tests and fuzzing"
 ```
 
