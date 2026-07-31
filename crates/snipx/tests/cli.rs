@@ -149,6 +149,15 @@ fn fmt_write_updates_path_in_place() {
 
 #[test]
 fn fmt_write_rejects_invalid_paths_before_reading_stdin() {
+    let warmup_status = ProcessCommand::cargo_bin("snipx")
+        .expect("snipx binary should build")
+        .arg("--help")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .expect("snipx warmup should run");
+    assert!(warmup_status.success());
+
     for args in [vec!["fmt", "--write"], vec!["fmt", "--write", "-"]] {
         let mut command = ProcessCommand::cargo_bin("snipx").expect("snipx binary should build");
         let mut child = command

@@ -12,6 +12,20 @@ style runs, or editor metadata.
 This document is a draft v0 specification. It deliberately favours a
 small, hand-authorable core over implementation completeness.
 
+## Reference Implementation Status
+
+The Rust reference implementation in this repository covers the three v0
+variants, lossless parsing, conservative formatting, expansion, canonical JSON,
+and snippet resolution over plain text and Markdown. It currently implements
+the `plain`, `plain-loose`, `markdown`, and `markdown-loose` profiles.
+
+Other host and rich-document profiles described by this specification define
+the language's intended extension model; they are not yet implemented. The
+parser and formatter recognise `@target` and `@profile` directives, while the
+current CLI receives active target and profile settings through `--target` and
+`--profile` options. See the [project README](../README.md) for supported
+commands, build instructions, and current release status.
+
 ## Variants
 
 SnipX is the umbrella language. v0 defines three usage variants.
