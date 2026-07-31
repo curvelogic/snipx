@@ -1,7 +1,11 @@
+use assert_cmd::cargo::CommandCargoExt;
 use assert_cmd::Command;
 use predicates::prelude::*;
 use std::fs;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::io::Read;
+use std::process::{Command as ProcessCommand, Stdio};
+use std::thread;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 fn temp_file(name: &str, contents: &str) -> std::path::PathBuf {
     let mut path = std::env::temp_dir();
@@ -141,6 +145,51 @@ fn fmt_write_updates_path_in_place() {
     fs::remove_file(&path).expect("temp input should be removable");
 
     assert_eq!(output, "[Alice] a Character.\n");
+}
+
+#[test]
+fn fmt_write_rejects_invalid_paths_before_reading_stdin() {
+    for args in [vec!["fmt", "--write"], vec!["fmt", "--write", "-"]] {
+        let mut command = ProcessCommand::cargo_bin("snipx").expect("snipx binary should build");
+        let mut child = command
+            .args(&args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("snipx binary should start");
+        let _open_stdin = child.stdin.take().expect("stdin should be piped");
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let status = loop {
+            if let Some(status) = child.try_wait().expect("child status should be readable") {
+                break status;
+            }
+            if Instant::now() >= deadline {
+                child.kill().expect("blocked child should be killable");
+                child.wait().expect("killed child should be waitable");
+                panic!("fmt --write blocked reading stdin for arguments {args:?}");
+            }
+            thread::sleep(Duration::from_millis(10));
+        };
+        let mut stdout = String::new();
+        child
+            .stdout
+            .take()
+            .expect("stdout should be piped")
+            .read_to_string(&mut stdout)
+            .expect("stdout should be readable");
+        let mut stderr = String::new();
+        child
+            .stderr
+            .take()
+            .expect("stderr should be piped")
+            .read_to_string(&mut stderr)
+            .expect("stderr should be readable");
+
+        assert_eq!(status.code(), Some(2));
+        assert_eq!(stdout, "");
+        assert!(stderr.contains("--write requires a path argument"));
+    }
 }
 
 #[test]

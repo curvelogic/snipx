@@ -190,6 +190,16 @@ fn run_document(args: DocumentArgs) -> Result<u8, CliError> {
 
 fn run_fmt(args: FmtArgs) -> Result<u8, CliError> {
     let input_form = select_input_form(&args.input)?;
+    let write_path = if args.write {
+        Some(
+            args.path
+                .as_ref()
+                .filter(|path| path.as_path() != Path::new("-"))
+                .ok_or_else(|| CliError::usage("--write requires a path argument"))?,
+        )
+    } else {
+        None
+    };
     let input = read_input(args.path.as_deref())?;
     let result = format(&input, FormatOptions { input_form });
     let has_errors = result
@@ -197,12 +207,7 @@ fn run_fmt(args: FmtArgs) -> Result<u8, CliError> {
         .iter()
         .any(|diagnostic| diagnostic.severity == snipx_core::Severity::Error);
 
-    if args.write {
-        let path = args
-            .path
-            .as_ref()
-            .filter(|path| path.as_path() != Path::new("-"))
-            .ok_or_else(|| CliError::usage("--write requires a path argument"))?;
+    if let Some(path) = write_path {
         fs::write(path, result.output).map_err(|source| CliError::io(path, source))?;
     } else {
         write!(io::stdout(), "{}", result.output).map_err(CliError::stdout)?;
