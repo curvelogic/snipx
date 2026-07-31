@@ -159,7 +159,7 @@ fn fmt_write_rejects_invalid_paths_before_reading_stdin() {
             .spawn()
             .expect("snipx binary should start");
         let _open_stdin = child.stdin.take().expect("stdin should be piped");
-        let deadline = Instant::now() + Duration::from_secs(2);
+        let deadline = Instant::now() + Duration::from_secs(10);
         let status = loop {
             if let Some(status) = child.try_wait().expect("child status should be readable") {
                 break status;

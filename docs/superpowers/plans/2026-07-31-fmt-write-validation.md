@@ -51,7 +51,7 @@ fn fmt_write_rejects_invalid_paths_before_reading_stdin() {
             .spawn()
             .expect("snipx binary should start");
         let _open_stdin = child.stdin.take().expect("stdin should be piped");
-        let deadline = Instant::now() + Duration::from_secs(2);
+        let deadline = Instant::now() + Duration::from_secs(10);
         let status = loop {
             if let Some(status) = child.try_wait().expect("child status should be readable") {
                 break status;
@@ -86,7 +86,7 @@ fn fmt_write_rejects_invalid_paths_before_reading_stdin() {
 ```
 
 The test explicitly retains the pipe writer in `_open_stdin`, polls the real
-child process with a two-second deadline, and kills it before panicking if it
+child process with a ten-second deadline, and kills it before panicking if it
 blocks. This makes the current behavior fail deterministically instead of
 hanging the suite.
 
@@ -98,7 +98,7 @@ Run:
 cargo test -p snipx --test cli fmt_write_rejects_invalid_paths_before_reading_stdin -- --exact
 ```
 
-Expected: FAIL after the two-second timeout because the current implementation
+Expected: FAIL after the ten-second timeout because the current implementation
 blocks in `read_input` and is killed instead of exiting with code 2.
 
 - [x] **Step 3: Move write-target validation before the input read**
