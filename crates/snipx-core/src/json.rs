@@ -1,6 +1,7 @@
 use rowan::NodeOrToken;
 use serde::Serialize;
 
+use crate::ast::AstNode;
 use crate::diagnostic::{Diagnostic, DiagnosticCode, RelatedSpan, Severity, SourceSpan};
 use crate::expand::{expand, ExpandOptions, ExpandedStatement, Value};
 use crate::input::{InputForm, ParseOptions};
@@ -14,7 +15,9 @@ pub struct ExportRequest {
     pub source: String,
     pub input_form: InputForm,
     pub target_text: Option<String>,
-    pub profile: Profile,
+    /// Explicitly requested profile. When absent, a commentaria
+    /// `@profile` directive is honoured, falling back to plain.
+    pub profile: Option<Profile>,
     pub path: Option<String>,
     pub target_uri: Option<String>,
     pub ambient_subject: Option<Value>,
@@ -155,6 +158,40 @@ pub fn export_json(request: ExportRequest) -> ExportDocument {
             input_form: request.input_form,
         },
     );
+    let header = (request.input_form == InputForm::Commentaria)
+        .then(|| crate::ast::Root::cast(parsed.syntax().clone()))
+        .flatten()
+        .map(|root| root.header_directives())
+        .unwrap_or_default();
+    let mut directive_diagnostics: Vec<Diagnostic> = header
+        .duplicates
+        .iter()
+        .map(|(name, span)| Diagnostic {
+            code: DiagnosticCode::DuplicateDirective,
+            severity: Severity::Warning,
+            message: format!("Duplicate @{name} directive is ignored"),
+            span: Some(span.clone()),
+            related: Vec::new(),
+        })
+        .collect();
+    let profile = match (request.profile, &header.profile) {
+        (Some(profile), _) => profile,
+        (None, Some(directive)) => match Profile::from_name(&directive.value) {
+            Some(profile) => profile,
+            None => {
+                directive_diagnostics.push(Diagnostic {
+                    code: DiagnosticCode::UnsupportedProfile,
+                    severity: Severity::Error,
+                    message: format!("Unsupported profile: {}", directive.value),
+                    span: Some(directive.span.clone()),
+                    related: Vec::new(),
+                });
+                Profile::Plain
+            }
+        },
+        (None, None) => Profile::Plain,
+    };
+
     let implicit_target =
         (request.input_form == InputForm::Intralinea).then(|| intralinea_visible_source(&parsed));
     let expanded = expand(
@@ -167,14 +204,14 @@ pub fn export_json(request: ExportRequest) -> ExportDocument {
     let target_text = request.target_text.or(implicit_target);
     let mut visible_text = None;
     let (statements, resolutions, mut diagnostics) = if let Some(target_text) = target_text {
-        match extract_visible_text(&target_text, request.profile) {
+        match extract_visible_text(&target_text, profile) {
             Ok(visible) => {
                 let extraction_diagnostics = visible.diagnostics.clone();
                 let resolved = resolve(
                     &expanded,
                     &visible,
                     ResolveOptions {
-                        profile: Some(request.profile),
+                        profile: Some(profile),
                     },
                 );
                 visible_text = Some(JsonVisibleText {
@@ -209,10 +246,16 @@ pub fn export_json(request: ExportRequest) -> ExportDocument {
             related: Vec::new(),
         });
     }
+    diagnostics.extend(directive_diagnostics);
 
     let target = Some(JsonTarget {
-        uri: request.target_uri,
-        profile: profile_name(request.profile).to_owned(),
+        uri: request.target_uri.or_else(|| {
+            header
+                .target
+                .as_ref()
+                .map(|directive| directive.value.clone())
+        }),
+        profile: profile_name(profile).to_owned(),
     });
 
     ExportDocument {
@@ -359,6 +402,7 @@ fn diagnostic_code(code: DiagnosticCode) -> &'static str {
         DiagnosticCode::UnterminatedBlockComment => "UNTERMINATED_BLOCK_COMMENT",
         DiagnosticCode::UnterminatedIntralineaBlock => "UNTERMINATED_INTRALINEA_BLOCK",
         DiagnosticCode::InvalidDirectivePosition => "INVALID_DIRECTIVE_POSITION",
+        DiagnosticCode::DuplicateDirective => "DUPLICATE_DIRECTIVE",
         DiagnosticCode::InvalidLocalSubjectMarker => "INVALID_LOCAL_SUBJECT_MARKER",
         DiagnosticCode::InvalidCliUsage => "INVALID_CLI_USAGE",
         DiagnosticCode::MissingAmbientSubject => "MISSING_AMBIENT_SUBJECT",

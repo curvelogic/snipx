@@ -1,6 +1,20 @@
 use rowan::NodeOrToken;
 
+use crate::diagnostic::SourceSpan;
 use crate::syntax::{SyntaxKind, SyntaxNode};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DirectiveValue {
+    pub value: String,
+    pub span: SourceSpan,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HeaderDirectives {
+    pub profile: Option<DirectiveValue>,
+    pub target: Option<DirectiveValue>,
+    pub duplicates: Vec<(String, SourceSpan)>,
+}
 
 pub trait AstNode: Sized {
     fn can_cast(kind: SyntaxKind) -> bool;
@@ -81,6 +95,27 @@ impl Root {
 
     pub fn directives(&self) -> impl Iterator<Item = Directive> + '_ {
         self.syntax.descendants().filter_map(Directive::cast)
+    }
+
+    pub fn header_directives(&self) -> HeaderDirectives {
+        let mut header = HeaderDirectives::default();
+        for directive in self.directives() {
+            let slot = match directive.syntax().kind() {
+                SyntaxKind::ProfileDirective => ("profile", &mut header.profile),
+                SyntaxKind::TargetDirective => ("target", &mut header.target),
+                _ => continue,
+            };
+            let Some(value) = directive.value() else {
+                continue;
+            };
+            let (name, slot) = slot;
+            if slot.is_none() {
+                *slot = Some(value);
+            } else {
+                header.duplicates.push((name.to_owned(), value.span));
+            }
+        }
+        header
     }
 }
 
@@ -205,9 +240,44 @@ impl Directive {
     }
 }
 
+impl Directive {
+    /// The directive's value: the URI body for `@target`, or the first
+    /// value identifier for `@profile`. The directive name itself is an
+    /// identifier token, not a node, so it never matches here.
+    pub fn value(&self) -> Option<DirectiveValue> {
+        self.syntax.children().find_map(|child| match child.kind() {
+            SyntaxKind::Uri => {
+                let text = child.to_string();
+                let value = text
+                    .strip_prefix('<')
+                    .and_then(|text| text.strip_suffix('>'))
+                    .unwrap_or(&text)
+                    .to_owned();
+                Some(DirectiveValue {
+                    value,
+                    span: node_span(&child),
+                })
+            }
+            SyntaxKind::Identifier => Some(DirectiveValue {
+                value: child.to_string(),
+                span: node_span(&child),
+            }),
+            _ => None,
+        })
+    }
+}
+
 impl Snippet {
     pub fn captures(&self) -> impl Iterator<Item = Capture> + '_ {
         self.syntax.descendants().filter_map(Capture::cast)
+    }
+}
+
+fn node_span(node: &SyntaxNode) -> SourceSpan {
+    let range = node.text_range();
+    SourceSpan {
+        start: u32::from(range.start()) as usize,
+        end: u32::from(range.end()) as usize,
     }
 }
 

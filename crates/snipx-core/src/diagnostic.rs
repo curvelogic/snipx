@@ -18,6 +18,7 @@ pub enum DiagnosticCode {
     UnterminatedBlockComment,
     UnterminatedIntralineaBlock,
     InvalidDirectivePosition,
+    DuplicateDirective,
     InvalidLocalSubjectMarker,
     InvalidCliUsage,
     MissingAmbientSubject,

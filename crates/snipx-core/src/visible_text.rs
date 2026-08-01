@@ -11,6 +11,18 @@ pub enum Profile {
     MarkdownLoose,
 }
 
+impl Profile {
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "plain" => Some(Self::Plain),
+            "plain-loose" => Some(Self::PlainLoose),
+            "markdown" => Some(Self::Markdown),
+            "markdown-loose" => Some(Self::MarkdownLoose),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VisibleText {
     pub text: String,

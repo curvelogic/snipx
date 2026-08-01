@@ -32,6 +32,84 @@ fn help_lists_the_available_subcommands() {
         .stdout(predicate::str::contains("fmt"));
 }
 
+fn temp_dir(name: &str) -> std::path::PathBuf {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock should be after epoch")
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!("snipx-cli-{name}-{unique}"));
+    fs::create_dir_all(&path).expect("temp dir should be creatable");
+    path
+}
+
+#[test]
+fn target_directive_resolves_relative_to_the_source_file() {
+    let dir = temp_dir("target-directive");
+    fs::write(dir.join("chapter.txt"), "Alice waited.").expect("target should be writable");
+    let notes = dir.join("notes.snipx");
+    fs::write(&notes, "@target <chapter.txt>\n\n[Alice] a Character.\n")
+        .expect("notes should be writable");
+
+    let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
+    command
+        .arg("export")
+        .arg(&notes)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"uri\":\"chapter.txt\""))
+        .stdout(predicate::str::contains(
+            "\"spans\":[{\"start\":0,\"end\":5}]",
+        ));
+}
+
+#[test]
+fn cli_target_overrides_the_target_directive() {
+    let dir = temp_dir("target-override");
+    fs::write(dir.join("real.txt"), "Alice waited.").expect("target should be writable");
+    let notes = dir.join("notes.snipx");
+    fs::write(&notes, "@target <missing.txt>\n\n[Alice] a Character.\n")
+        .expect("notes should be writable");
+
+    let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
+    command
+        .arg("export")
+        .arg(&notes)
+        .arg("--target")
+        .arg(dir.join("real.txt"))
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "\"spans\":[{\"start\":0,\"end\":5}]",
+        ));
+}
+
+#[test]
+fn missing_target_directive_file_is_an_io_error() {
+    let dir = temp_dir("target-missing");
+    let notes = dir.join("notes.snipx");
+    fs::write(&notes, "@target <missing.txt>\n\n[Alice] a Character.\n")
+        .expect("notes should be writable");
+
+    let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
+    command
+        .arg("export")
+        .arg(&notes)
+        .assert()
+        .code(3)
+        .stderr(predicate::str::contains("missing.txt"));
+}
+
+#[test]
+fn unsupported_profile_directive_exits_with_code_four() {
+    let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
+    command
+        .arg("export")
+        .write_stdin("@profile rtf-loose\n\nAlice a Character.\n")
+        .assert()
+        .code(4)
+        .stdout(predicate::str::contains("UNSUPPORTED_PROFILE"));
+}
+
 #[test]
 fn version_flag_reports_the_crate_version() {
     let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
