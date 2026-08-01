@@ -1,0 +1,172 @@
+name: Release
+
+# Manually dispatched: builds release binaries for every supported target,
+# packages them with checksums and signed build provenance, and stages a
+# single DRAFT release at tag v<version>. Publishing the draft (in the UI)
+# creates the tag. The version is resolved from the CLI crate manifest, so
+# bump crates/*/Cargo.toml and add a CHANGELOG.md section before running.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  prepare:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: v
+        run: |
+          version=$(grep -m1 '^version = ' crates/snipx/Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          if [ -z "$version" ]; then echo "could not resolve version" >&2; exit 1; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "Resolved release version: v$version"
+
+  binary:
+    name: ${{ matrix.target }}
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux: statically linked against musl — a self-contained binary.
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+          # macOS: both arches build on the Apple-silicon runner — the macOS
+          # SDK ships both slices, so x86_64 is a plain cross-compile (a CLI
+          # needs no signing). Pinned to macos-15, not macos-latest, so release
+          # binaries do not silently change SDK baseline when GitHub moves the
+          # alias; bump the pin deliberately as its own reviewed change.
+          - os: macos-15 # Apple silicon runner
+            target: aarch64-apple-darwin
+          - os: macos-15 # Apple silicon runner, cross-compiling to x86_64
+            target: x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88 # stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      - name: Install cross-linker (musl)
+        if: contains(matrix.target, 'linux-musl')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu
+            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+          fi
+      - name: Build release binary
+        run: cargo build --release --locked --bin snipx --target ${{ matrix.target }}
+      - name: Package
+        # Values pass through the environment and are referenced as bash
+        # variables — never interpolated into the script text — so nothing
+        # crafted can inject shell. (matrix.target is a static workflow value.)
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          staging="snipx-${TAG}-${TARGET}"
+          mkdir "$staging"
+          cp "target/${TARGET}/release/snipx" "$staging/"
+          cp README.md LICENSE-MIT LICENSE-APACHE "$staging/" 2>/dev/null || true
+          # Archive the *contents* (binary at the root) so the Homebrew
+          # formula is a plain `bin.install "snipx"`.
+          tar -C "$staging" -czf "$staging.tar.gz" .
+          shasum -a 256 "$staging.tar.gz" > "$staging.tar.gz.sha256"
+      - name: Upload build artifacts
+        # Hand the archives to the single release job; do NOT touch the draft
+        # release here (parallel draft creation races).
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: snipx-${{ matrix.target }}
+          path: |
+            snipx-*.tar.gz
+            snipx-*.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Stage draft release
+    needs: [prepare, binary]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create/attach the draft release
+      id-token: write # mint the OIDC token for Sigstore signing (attestation)
+      attestations: write # persist the build-provenance attestation
+    steps:
+      # Checkout FIRST — it cleans the workspace, so it must precede the
+      # artifact download (which writes into dist/). The tree is needed for
+      # CHANGELOG.md.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download build artifacts
+        # v8 verifies the download digest and fails on mismatch by default —
+        # desirable hardening for release assets.
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Attest build provenance
+        # Signed SLSA build provenance for every release archive, so published
+        # binaries are verifiably built by this workflow:
+        #   gh attestation verify <archive> --repo curvelogic/snipx
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: dist/snipx-*.tar.gz
+      - name: Extract release notes from CHANGELOG
+        # The release body is the curated CHANGELOG section for this version —
+        # not GitHub's auto commit/PR list. Extract the lines under the
+        # `## [<version>]` heading up to the next `## [` heading. VERSION comes
+        # through the environment (never interpolated into the script text).
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          # Stop at the next version heading (## [..]) or the trailing
+          # link-reference-definition block ([label]: url) that Keep a
+          # Changelog puts at the foot of the file.
+          awk -v tag="## [$VERSION]" '
+            index($0, tag) == 1     { found = 1; next }
+            found && /^## \[/       { exit }
+            found && /^\[[^][]+\]:/ { exit }
+            found                   { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
+          # Drop leading blank lines (the blank after the heading).
+          sed -i -e '/./,$!d' RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "no CHANGELOG.md section for $VERSION — add one before releasing" >&2
+            exit 1
+          fi
+          echo "Release notes for $VERSION:"; echo "---"; cat RELEASE_NOTES.md
+      - name: Stage the draft release
+        # A SINGLE softprops call with every asset → exactly one draft at tag
+        # `v<version>`, targeting the built commit. The tag ref is not created
+        # until the draft is published (by you, in the UI). The body is the
+        # curated CHANGELOG section (body_path), not auto-generated notes.
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          draft: true
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: ${{ needs.prepare.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          body_path: RELEASE_NOTES.md
+          fail_on_unmatched_files: true
+          files: |
+            dist/snipx-*.tar.gz
+            dist/snipx-*.tar.gz.sha256
