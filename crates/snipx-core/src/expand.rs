@@ -188,8 +188,8 @@ fn value_from_node(node: &SyntaxNode) -> Option<Value> {
                 .unwrap_or(&text)
                 .to_owned(),
         )),
-        SyntaxKind::String => Some(Value::String(unquote(&text, 1))),
-        SyntaxKind::TripleString => Some(Value::String(unquote(&text, 3))),
+        SyntaxKind::String => Some(Value::String(unescape(&unquote(&text, 1)))),
+        SyntaxKind::TripleString => Some(Value::String(dedent(&unquote(&text, 3)))),
         SyntaxKind::Number => text.parse().ok().map(|number: f64| {
             if number.is_finite() {
                 Value::Number(number)
@@ -217,6 +217,63 @@ fn diagnose_invalid_number(value: &Value, span: Option<SourceSpan>, result: &mut
             related: Vec::new(),
         });
     }
+}
+
+fn unescape(text: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    let mut chars = text.chars();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            output.push(ch);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => output.push('\n'),
+            Some('t') => output.push('\t'),
+            Some('r') => output.push('\r'),
+            Some('\\') => output.push('\\'),
+            Some('"') => output.push('"'),
+            Some('\'') => output.push('\''),
+            Some('0') => output.push('\0'),
+            // Unknown escapes stay verbatim rather than silently dropping text.
+            Some(other) => {
+                output.push('\\');
+                output.push(other);
+            }
+            None => output.push('\\'),
+        }
+    }
+    output
+}
+
+fn dedent(text: &str) -> String {
+    let Some(body) = text
+        .strip_prefix('\n')
+        .or_else(|| text.strip_prefix("\r\n"))
+    else {
+        return text.to_owned();
+    };
+
+    let lines: Vec<&str> = body.split('\n').collect();
+    let common_indent = lines
+        .iter()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| line.len() - line.trim_start_matches([' ', '\t']).len())
+        .min()
+        .unwrap_or(0);
+
+    lines
+        .iter()
+        .map(|line| {
+            line.get(common_indent.min(indent_len(line))..)
+                .unwrap_or("")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn indent_len(line: &str) -> usize {
+    line.len() - line.trim_start_matches([' ', '\t']).len()
 }
 
 fn unquote(text: &str, quote_width: usize) -> String {
