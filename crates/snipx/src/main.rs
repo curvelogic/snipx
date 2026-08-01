@@ -1,4 +1,5 @@
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
+use snipx_core::ast::AstNode;
 use snipx_core::{
     expand, export_json, format, parse, ExpandOptions, ExportRequest, FormatOptions, InputForm,
     ParseOptions, Profile, Value,
@@ -31,8 +32,8 @@ struct DocumentArgs {
     #[arg(long, value_name = "PATH")]
     target: Option<PathBuf>,
 
-    #[arg(long, value_enum, default_value = "plain")]
-    profile: CliProfile,
+    #[arg(long, value_enum)]
+    profile: Option<CliProfile>,
 
     #[arg(long, value_name = "EXPR", allow_hyphen_values = true)]
     ambient: Option<String>,
@@ -129,7 +130,7 @@ fn run() -> Result<u8, CliError> {
 
 fn run_document(args: DocumentArgs) -> Result<u8, CliError> {
     let input_form = select_input_form(&args.input)?;
-    let profile = Profile::from(args.profile);
+    let profile = args.profile.map(Profile::from);
 
     let source_uses_stdin = args
         .path
@@ -143,11 +144,16 @@ fn run_document(args: DocumentArgs) -> Result<u8, CliError> {
     }
 
     let source = read_input(args.path.as_deref())?;
-    let target_text = args
-        .target
-        .as_deref()
-        .map(|path| read_input(Some(path)))
-        .transpose()?;
+    let target_text = match args.target.as_deref() {
+        Some(path) => Some(read_input(Some(path))?),
+        None if input_form == InputForm::Commentaria => header_target_directive(&source)
+            .map(|value| {
+                let path = resolve_directive_target(&value, args.path.as_deref());
+                read_input(Some(&path))
+            })
+            .transpose()?,
+        None => None,
+    };
     let target_uri = args
         .target
         .as_ref()
@@ -255,6 +261,34 @@ fn read_input(path: Option<&Path>) -> Result<String, CliError> {
                 })?;
             Ok(input)
         }
+    }
+}
+
+fn header_target_directive(source: &str) -> Option<String> {
+    let parsed = parse(
+        source,
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    let root = snipx_core::ast::Root::cast(parsed.syntax().clone())?;
+    root.header_directives()
+        .target
+        .map(|directive| directive.value)
+}
+
+fn resolve_directive_target(value: &str, source_path: Option<&Path>) -> PathBuf {
+    let value = value.strip_prefix("file://").unwrap_or(value);
+    let target = Path::new(value);
+    if target.is_absolute() {
+        return target.to_path_buf();
+    }
+    match source_path {
+        Some(path) if path != Path::new("-") => path
+            .parent()
+            .map(|parent| parent.join(target))
+            .unwrap_or_else(|| target.to_path_buf()),
+        _ => target.to_path_buf(),
     }
 }
 
