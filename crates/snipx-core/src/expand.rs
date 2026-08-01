@@ -14,8 +14,35 @@ pub enum Value {
     Uri(String),
     Snippet(String),
     TextSpanSnippet(String),
+    LocalSubject(LocalSubject),
     WholeDocument,
     Unresolved(String),
+    UnresolvedLocalSubject(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LocalScope {
+    Sentence,
+    Paragraph,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LocalRegion {
+    Before,
+    After,
+    Whole,
+}
+
+/// An intralinea local subject marker (`<`, `>`, `<>`, `<<`, `>>`,
+/// `<<>>`, optionally `~`-prefixed), anchored to its enclosing
+/// `{{ ... }}` block for resolution against the stripped visible text.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LocalSubject {
+    pub marker: String,
+    pub scope: LocalScope,
+    pub region: LocalRegion,
+    pub text_span: bool,
+    pub block_span: SourceSpan,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -62,12 +89,19 @@ pub fn expand(parse: &Parse, options: ExpandOptions) -> ExpandResult {
 fn expand_statement(statement: &Statement, options: &ExpandOptions, result: &mut ExpandResult) {
     let statement_span = source_span(statement.syntax());
     let explicit_subject = statement.subject();
-    let subject_span = explicit_subject
+    let mut subject_span = explicit_subject
         .as_ref()
         .map(|subject| source_span(subject.syntax()));
-    let subject = explicit_subject
-        .and_then(|subject| value_from_node(subject.syntax()))
-        .or_else(|| options.ambient_subject.clone());
+    let subject = match explicit_subject.and_then(|subject| value_from_node(subject.syntax())) {
+        Some(value) => Some(value),
+        None => match local_subject_value(statement) {
+            Some((value, span)) => {
+                subject_span = Some(span);
+                Some(value)
+            }
+            None => options.ambient_subject.clone(),
+        },
+    };
 
     let Some(subject) = subject else {
         result.diagnostics.push(Diagnostic {
@@ -144,6 +178,41 @@ fn push_decoration(
         object_span: object_node.as_ref().map(source_span),
         statement_span: source_span(decoration.syntax()),
     });
+}
+
+fn local_subject_value(statement: &Statement) -> Option<(Value, SourceSpan)> {
+    let marker_node = statement
+        .syntax()
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::LocalSubjectMarker)?;
+    let marker = marker_node.to_string();
+    let (text_span, body) = match marker.strip_prefix('~') {
+        Some(rest) => (true, rest),
+        None => (false, marker.as_str()),
+    };
+    let (scope, region) = match body {
+        "<" => (LocalScope::Sentence, LocalRegion::Before),
+        ">" => (LocalScope::Sentence, LocalRegion::After),
+        "<>" => (LocalScope::Sentence, LocalRegion::Whole),
+        "<<" => (LocalScope::Paragraph, LocalRegion::Before),
+        ">>" => (LocalScope::Paragraph, LocalRegion::After),
+        "<<>>" => (LocalScope::Paragraph, LocalRegion::Whole),
+        _ => return None,
+    };
+    let block = marker_node
+        .ancestors()
+        .find(|node| node.kind() == SyntaxKind::IntralineaBlock)?;
+    let span = source_span(&marker_node);
+    Some((
+        Value::LocalSubject(LocalSubject {
+            marker,
+            scope,
+            region,
+            text_span,
+            block_span: source_span(&block),
+        }),
+        span,
+    ))
 }
 
 fn predicate_text(node: &SyntaxNode) -> String {
