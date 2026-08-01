@@ -8,8 +8,7 @@ of visible text in a target document. SnipX resolves snippets over a canonical
 visible-text stream rather than source markup, style runs, or editor metadata.
 
 This repository contains the draft v0 language specification and a working
-Rust reference implementation. The implementation is pre-release software;
-both crates currently use version `0.0.0`.
+Rust reference implementation.
 
 ## Implemented Features
 
@@ -150,9 +149,8 @@ Use `bd ready` to find available work and `bd show <id>` for details.
 
 ## Project Status
 
-The planned v0 Rust reference implementation is complete. The language
-specification remains a draft, and the crates have not received a stable
-release version. Later-version ideas—including rich-document extraction,
+The planned v0 Rust reference implementation is complete and released as
+v0.1.0. The language specification remains a draft. Later-version ideas—including rich-document extraction,
 editable rich-text mappings, additional syntax, and RDF-like export—are listed
 under [Deferred And Open Issues](docs/language-spec.md#deferred-and-open-issues)
 in the language specification.

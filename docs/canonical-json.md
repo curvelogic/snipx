@@ -3,15 +3,18 @@
 JSON is the canonical machine output of the reference implementation.
 `snipx check`, `snipx resolve`, and `snipx export` emit one JSON
 document on stdout; `--pretty` changes formatting only, never the
-schema. The schema may evolve before v0.1, but this document describes
-the current contract for downstream tools.
+schema. The three commands report nested slices of the same document:
+`check` emits the envelope and `diagnostics` only, `resolve` adds
+`visibleText` and `resolutions`, and `export` adds `facts`. The
+schema may still evolve, but this document describes the current
+contract for downstream tools.
 
 ## Document shape
 
 ```json
 {
   "snipxVersion": "0.0",
-  "implementation": { "name": "snipx", "version": "0.0.0" },
+  "implementation": { "name": "snipx", "version": "0.1.0" },
   "input": { "form": "commentaria", "path": "notes.snipx" },
   "target": { "uri": "chapter.txt", "profile": "plain" },
   "visibleText": { "normalisation": "NFC", "length": 18422 },
