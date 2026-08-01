@@ -20,6 +20,7 @@ pub enum DiagnosticCode {
     InvalidDirectivePosition,
     DuplicateDirective,
     InvalidLocalSubjectMarker,
+    EmptyLocalSubject,
     InvalidCliUsage,
     MissingAmbientSubject,
     InvalidDecorationTarget,

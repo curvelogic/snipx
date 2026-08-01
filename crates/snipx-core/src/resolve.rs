@@ -1,11 +1,23 @@
 use crate::diagnostic::{Diagnostic, DiagnosticCode, Severity, SourceSpan};
-use crate::expand::{ExpandResult, ExpandedStatement, Value};
+use crate::expand::{
+    ExpandResult, ExpandedStatement, LocalRegion, LocalScope, LocalSubject, Value,
+};
 use crate::r#match::{match_snippet, TextSpan};
 use crate::visible_text::{Profile, VisibleText};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ResolveOptions {
     pub profile: Option<Profile>,
+    /// Visible-text anchor for each intralinea block, used to resolve
+    /// local subject markers. `visible_offset` counts Unicode scalar
+    /// values into the NFC visible text at the block's position.
+    pub intralinea_anchors: Vec<IntralineaAnchor>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IntralineaAnchor {
+    pub block_span: SourceSpan,
+    pub visible_offset: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,6 +53,7 @@ pub fn resolve(
             subject_span,
             visible_text,
             profile,
+            &options.intralinea_anchors,
             &mut result.resolutions,
             &mut result.diagnostics,
         );
@@ -50,6 +63,7 @@ pub fn resolve(
             object_span,
             visible_text,
             profile,
+            &options.intralinea_anchors,
             &mut result.resolutions,
             &mut result.diagnostics,
         );
@@ -63,9 +77,23 @@ fn resolve_value(
     source_span: Option<crate::SourceSpan>,
     visible_text: &VisibleText,
     profile: Profile,
+    anchors: &[IntralineaAnchor],
     resolutions: &mut Vec<SnippetResolution>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
+    if let Value::LocalSubject(local) = value {
+        let local = local.clone();
+        resolve_local_subject(
+            value,
+            &local,
+            source_span,
+            visible_text,
+            anchors,
+            resolutions,
+            diagnostics,
+        );
+        return;
+    }
     let source = match value {
         Value::Snippet(source) | Value::TextSpanSnippet(source) => source.clone(),
         _ => return,
@@ -118,6 +146,190 @@ fn resolve_value(
         source_span,
         spans,
     });
+}
+
+fn resolve_local_subject(
+    value: &mut Value,
+    local: &LocalSubject,
+    source_span: Option<SourceSpan>,
+    visible_text: &VisibleText,
+    anchors: &[IntralineaAnchor],
+    resolutions: &mut Vec<SnippetResolution>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let anchor = anchors
+        .iter()
+        .find(|anchor| anchor.block_span == local.block_span);
+    let Some(anchor) = anchor else {
+        diagnostics.push(diagnostic(
+            DiagnosticCode::InvalidLocalSubjectMarker,
+            format!(
+                "Local subject {} cannot be anchored in the visible text",
+                local.marker
+            ),
+            source_span,
+        ));
+        *value = Value::UnresolvedLocalSubject(local.marker.clone());
+        return;
+    };
+
+    let chars: Vec<char> = visible_text.text.chars().collect();
+    let span = match local.scope {
+        LocalScope::Sentence => sentence_span(&chars, anchor.visible_offset, local.region),
+        LocalScope::Paragraph => paragraph_span(&chars, anchor.visible_offset, local.region),
+    };
+
+    if span.start >= span.end {
+        diagnostics.push(diagnostic(
+            DiagnosticCode::EmptyLocalSubject,
+            format!("Local subject {} selects no text", local.marker),
+            source_span,
+        ));
+        *value = Value::UnresolvedLocalSubject(local.marker.clone());
+        return;
+    }
+
+    resolutions.push(SnippetResolution {
+        source: local.marker.clone(),
+        source_span,
+        spans: vec![span],
+    });
+}
+
+fn is_terminator(ch: char) -> bool {
+    matches!(ch, '.' | '?' | '!')
+}
+
+/// A sentence boundary is `.`, `?`, or `!` followed by whitespace or
+/// end of text (the spec's simple v0 rule).
+fn is_sentence_boundary(chars: &[char], index: usize) -> bool {
+    is_terminator(chars[index]) && chars.get(index + 1).is_none_or(|next| next.is_whitespace())
+}
+
+fn skip_whitespace_back(chars: &[char], mut pos: usize) -> usize {
+    while pos > 0 && chars[pos - 1].is_whitespace() {
+        pos -= 1;
+    }
+    pos
+}
+
+fn skip_whitespace_forward(chars: &[char], mut pos: usize) -> usize {
+    while pos < chars.len() && chars[pos].is_whitespace() {
+        pos += 1;
+    }
+    pos
+}
+
+fn forward_sentence_end(chars: &[char], from: usize) -> usize {
+    let mut index = from;
+    while index < chars.len() {
+        if is_sentence_boundary(chars, index) {
+            return index + 1;
+        }
+        index += 1;
+    }
+    chars.len()
+}
+
+fn sentence_span(chars: &[char], anchor: usize, region: LocalRegion) -> TextSpan {
+    let anchor = anchor.min(chars.len());
+    if region == LocalRegion::After {
+        let start = skip_whitespace_forward(chars, anchor);
+        return TextSpan {
+            start,
+            end: forward_sentence_end(chars, start),
+        };
+    }
+
+    // `<` and `<>` attach backwards: a marker placed just after a
+    // completed sentence refers to that sentence.
+    let attach = skip_whitespace_back(chars, anchor);
+    let ends_at_attach = attach > 0 && is_terminator(chars[attach - 1]);
+    let scan_from = if ends_at_attach { attach - 1 } else { attach };
+    let mut start = 0;
+    let mut index = scan_from;
+    while index > 0 {
+        if is_sentence_boundary(chars, index - 1) {
+            start = index;
+            break;
+        }
+        index -= 1;
+    }
+    start = skip_whitespace_forward(chars, start).min(attach);
+
+    let end = match region {
+        LocalRegion::Before => attach,
+        LocalRegion::Whole if ends_at_attach => attach,
+        LocalRegion::Whole => forward_sentence_end(chars, attach),
+        LocalRegion::After => unreachable!("handled above"),
+    };
+    TextSpan { start, end }
+}
+
+fn paragraph_span(chars: &[char], anchor: usize, region: LocalRegion) -> TextSpan {
+    let anchor = anchor.min(chars.len());
+    if region == LocalRegion::After {
+        let start = skip_whitespace_forward(chars, anchor);
+        let (_, end) = paragraph_bounds(chars, start);
+        return TextSpan {
+            start,
+            end: end.max(start),
+        };
+    }
+
+    let attach = skip_whitespace_back(chars, anchor);
+    let (start, end) = paragraph_bounds(chars, attach.saturating_sub(1));
+    let start = start.min(attach);
+    let end = match region {
+        LocalRegion::Before => attach,
+        LocalRegion::Whole => end.max(attach),
+        LocalRegion::After => unreachable!("handled above"),
+    };
+    TextSpan { start, end }
+}
+
+/// The paragraph containing `pos`: the surrounding maximal run of
+/// non-blank lines, with the end trimmed of trailing whitespace.
+fn paragraph_bounds(chars: &[char], pos: usize) -> (usize, usize) {
+    let lines = line_ranges(chars);
+    if lines.is_empty() {
+        return (0, 0);
+    }
+    let pos = pos.min(chars.len());
+    let mut line = lines
+        .iter()
+        .position(|range| pos >= range.0 && pos <= range.1)
+        .unwrap_or(lines.len() - 1);
+
+    let blank =
+        |range: &(usize, usize)| chars[range.0..range.1].iter().all(|ch| ch.is_whitespace());
+    if blank(&lines[line]) {
+        return (lines[line].0, lines[line].0);
+    }
+    let mut first = line;
+    while first > 0 && !blank(&lines[first - 1]) {
+        first -= 1;
+    }
+    while line + 1 < lines.len() && !blank(&lines[line + 1]) {
+        line += 1;
+    }
+    let start = lines[first].0;
+    let end = skip_whitespace_back(chars, lines[line].1);
+    (start, end)
+}
+
+/// Line ranges as `[start, end)` char offsets, excluding the newline.
+fn line_ranges(chars: &[char]) -> Vec<(usize, usize)> {
+    let mut lines = Vec::new();
+    let mut start = 0;
+    for (index, ch) in chars.iter().enumerate() {
+        if *ch == '\n' {
+            lines.push((start, index));
+            start = index + 1;
+        }
+    }
+    lines.push((start, chars.len()));
+    lines
 }
 
 #[derive(Debug, Clone, Copy)]

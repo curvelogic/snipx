@@ -4,8 +4,9 @@ use serde::Serialize;
 use crate::ast::AstNode;
 use crate::diagnostic::{Diagnostic, DiagnosticCode, RelatedSpan, Severity, SourceSpan};
 use crate::expand::{expand, ExpandOptions, ExpandedStatement, Value};
+use crate::expand::{LocalRegion, LocalScope};
 use crate::input::{InputForm, ParseOptions};
-use crate::resolve::{resolve, ResolveOptions, SnippetResolution};
+use crate::resolve::{resolve, IntralineaAnchor, ResolveOptions, SnippetResolution};
 use crate::syntax::SyntaxKind;
 use crate::visible_text::{extract_visible_text, Profile};
 use crate::{parse, TextSpan};
@@ -106,17 +107,50 @@ pub struct JsonFactSource {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum JsonValue {
-    Name { value: String },
-    Predicate { value: String },
-    String { value: String },
-    Number { value: f64 },
-    Boolean { value: bool },
-    Uri { value: String },
-    Snippet { source: String },
-    TextSpanSnippet { source: String },
+    Name {
+        value: String,
+    },
+    Predicate {
+        value: String,
+    },
+    String {
+        value: String,
+    },
+    Number {
+        value: f64,
+    },
+    Boolean {
+        value: bool,
+    },
+    Uri {
+        value: String,
+    },
+    Snippet {
+        source: String,
+    },
+    TextSpanSnippet {
+        source: String,
+    },
+    LocalSubject {
+        marker: String,
+        scope: String,
+        region: String,
+    },
+    TextSpanLocalSubject {
+        marker: String,
+        scope: String,
+        region: String,
+    },
     WholeDocument,
-    UnresolvedSnippet { source: String },
-    UnresolvedNumber { source: String },
+    UnresolvedSnippet {
+        source: String,
+    },
+    UnresolvedLocalSubject {
+        marker: String,
+    },
+    UnresolvedNumber {
+        source: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -192,8 +226,19 @@ pub fn export_json(request: ExportRequest) -> ExportDocument {
         (None, None) => Profile::Plain,
     };
 
-    let implicit_target =
-        (request.input_form == InputForm::Intralinea).then(|| intralinea_visible_source(&parsed));
+    let (implicit_target, intralinea_anchors) = match request.input_form {
+        InputForm::Intralinea => {
+            let (text, anchors) = intralinea_visible_source(&parsed);
+            // Anchors only apply when resolving against the stripped host
+            // text itself; an explicit target may be entirely different.
+            if request.target_text.is_none() {
+                (Some(text), anchors)
+            } else {
+                (Some(text), Vec::new())
+            }
+        }
+        _ => (None, Vec::new()),
+    };
     let expanded = expand(
         &parsed,
         ExpandOptions {
@@ -212,6 +257,7 @@ pub fn export_json(request: ExportRequest) -> ExportDocument {
                     &visible,
                     ResolveOptions {
                         profile: Some(profile),
+                        intralinea_anchors,
                     },
                 );
                 visible_text = Some(JsonVisibleText {
@@ -276,16 +322,30 @@ pub fn export_json(request: ExportRequest) -> ExportDocument {
     }
 }
 
-fn intralinea_visible_source(parsed: &crate::Parse) -> String {
-    parsed
-        .syntax()
-        .children_with_tokens()
-        .filter_map(|element| match element {
-            NodeOrToken::Node(node) if node.kind() == SyntaxKind::IntralineaBlock => None,
-            NodeOrToken::Node(node) => Some(node.to_string()),
-            NodeOrToken::Token(token) => Some(token.text().to_owned()),
-        })
-        .collect()
+fn intralinea_visible_source(parsed: &crate::Parse) -> (String, Vec<IntralineaAnchor>) {
+    use unicode_normalization::UnicodeNormalization;
+
+    let mut text = String::new();
+    let mut anchors = Vec::new();
+    for element in parsed.syntax().children_with_tokens() {
+        match element {
+            NodeOrToken::Node(node) if node.kind() == SyntaxKind::IntralineaBlock => {
+                let range = node.text_range();
+                anchors.push(IntralineaAnchor {
+                    block_span: SourceSpan {
+                        start: u32::from(range.start()) as usize,
+                        end: u32::from(range.end()) as usize,
+                    },
+                    // The visible text is NFC-normalised before matching, so
+                    // the anchor counts scalars of the normalised prefix.
+                    visible_offset: text.nfc().count(),
+                });
+            }
+            NodeOrToken::Node(node) => text.push_str(&node.to_string()),
+            NodeOrToken::Token(token) => text.push_str(token.text()),
+        }
+    }
+    (text, anchors)
 }
 
 fn json_fact(statement: ExpandedStatement) -> JsonFact {
@@ -316,8 +376,41 @@ fn json_value(value: Value) -> JsonValue {
         Value::Uri(value) => JsonValue::Uri { value },
         Value::Snippet(source) => JsonValue::Snippet { source },
         Value::TextSpanSnippet(source) => JsonValue::TextSpanSnippet { source },
+        Value::LocalSubject(local) => {
+            let scope = local_scope_name(local.scope).to_owned();
+            let region = local_region_name(local.region).to_owned();
+            if local.text_span {
+                JsonValue::TextSpanLocalSubject {
+                    marker: local.marker,
+                    scope,
+                    region,
+                }
+            } else {
+                JsonValue::LocalSubject {
+                    marker: local.marker,
+                    scope,
+                    region,
+                }
+            }
+        }
         Value::WholeDocument => JsonValue::WholeDocument,
         Value::Unresolved(source) => JsonValue::UnresolvedSnippet { source },
+        Value::UnresolvedLocalSubject(marker) => JsonValue::UnresolvedLocalSubject { marker },
+    }
+}
+
+fn local_scope_name(scope: LocalScope) -> &'static str {
+    match scope {
+        LocalScope::Sentence => "sentence",
+        LocalScope::Paragraph => "paragraph",
+    }
+}
+
+fn local_region_name(region: LocalRegion) -> &'static str {
+    match region {
+        LocalRegion::Before => "before",
+        LocalRegion::After => "after",
+        LocalRegion::Whole => "whole",
     }
 }
 
@@ -404,6 +497,7 @@ fn diagnostic_code(code: DiagnosticCode) -> &'static str {
         DiagnosticCode::InvalidDirectivePosition => "INVALID_DIRECTIVE_POSITION",
         DiagnosticCode::DuplicateDirective => "DUPLICATE_DIRECTIVE",
         DiagnosticCode::InvalidLocalSubjectMarker => "INVALID_LOCAL_SUBJECT_MARKER",
+        DiagnosticCode::EmptyLocalSubject => "EMPTY_LOCAL_SUBJECT",
         DiagnosticCode::InvalidCliUsage => "INVALID_CLI_USAGE",
         DiagnosticCode::MissingAmbientSubject => "MISSING_AMBIENT_SUBJECT",
         DiagnosticCode::InvalidDecorationTarget => "INVALID_DECORATION_TARGET",
