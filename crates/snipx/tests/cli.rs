@@ -111,6 +111,73 @@ fn unsupported_profile_directive_exits_with_code_four() {
 }
 
 #[test]
+fn check_reports_diagnostics_without_facts_or_resolutions() {
+    let target = temp_file("check-target", "Alice waited.");
+    let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
+
+    command
+        .arg("check")
+        .arg("--target")
+        .arg(&target)
+        .write_stdin("[Alice] a Character.\n")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"diagnostics\""))
+        .stdout(predicate::str::contains("\"facts\"").not())
+        .stdout(predicate::str::contains("\"resolutions\"").not())
+        .stdout(predicate::str::contains("\"visibleText\"").not());
+}
+
+#[test]
+fn check_still_exits_one_on_resolution_errors() {
+    let target = temp_file("check-error-target", "Bob waited.");
+    let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
+
+    command
+        .arg("check")
+        .arg("--target")
+        .arg(&target)
+        .write_stdin("[Alice] a Character.\n")
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains("SNIPPET_NOT_FOUND"));
+}
+
+#[test]
+fn resolve_reports_resolutions_without_facts() {
+    let target = temp_file("resolve-target", "Alice waited.");
+    let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
+
+    command
+        .arg("resolve")
+        .arg("--target")
+        .arg(&target)
+        .write_stdin("[Alice] a Character.\n")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"resolutions\""))
+        .stdout(predicate::str::contains("\"visibleText\""))
+        .stdout(predicate::str::contains("\"facts\"").not());
+}
+
+#[test]
+fn export_reports_facts_resolutions_and_diagnostics() {
+    let target = temp_file("export-target", "Alice waited.");
+    let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
+
+    command
+        .arg("export")
+        .arg("--target")
+        .arg(&target)
+        .write_stdin("[Alice] a Character.\n")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"facts\""))
+        .stdout(predicate::str::contains("\"resolutions\""))
+        .stdout(predicate::str::contains("\"diagnostics\""));
+}
+
+#[test]
 fn version_flag_reports_the_crate_version() {
     let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
 

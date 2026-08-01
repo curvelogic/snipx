@@ -123,12 +123,24 @@ fn run() -> Result<u8, CliError> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Check(args) | Command::Resolve(args) | Command::Export(args) => run_document(args),
+        Command::Check(args) => run_document(args, OutputView::Check),
+        Command::Resolve(args) => run_document(args, OutputView::Resolve),
+        Command::Export(args) => run_document(args, OutputView::Export),
         Command::Fmt(args) => run_fmt(args),
     }
 }
 
-fn run_document(args: DocumentArgs) -> Result<u8, CliError> {
+/// Which slice of the canonical JSON document a command reports.
+/// `check` validates, `resolve` adds resolution results, `export`
+/// emits the full document including facts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OutputView {
+    Check,
+    Resolve,
+    Export,
+}
+
+fn run_document(args: DocumentArgs, view: OutputView) -> Result<u8, CliError> {
     let input_form = select_input_form(&args.input)?;
     let profile = args.profile.map(Profile::from);
 
@@ -174,10 +186,27 @@ fn run_document(args: DocumentArgs) -> Result<u8, CliError> {
         ambient_subject,
     });
 
+    let mut value = serde_json::to_value(&document).map_err(|source| CliError {
+        code: 1,
+        message: format!("failed to serialise JSON: {source}"),
+    })?;
+    if let Some(object) = value.as_object_mut() {
+        match view {
+            OutputView::Check => {
+                object.remove("facts");
+                object.remove("resolutions");
+                object.remove("visibleText");
+            }
+            OutputView::Resolve => {
+                object.remove("facts");
+            }
+            OutputView::Export => {}
+        }
+    }
     let output = if args.pretty {
-        serde_json::to_string_pretty(&document)
+        serde_json::to_string_pretty(&value)
     } else {
-        serde_json::to_string(&document)
+        serde_json::to_string(&value)
     }
     .map_err(|source| CliError {
         code: 1,
