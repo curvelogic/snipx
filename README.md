@@ -121,6 +121,8 @@ export. The `snipx` crate provides the CLI.
 
 - [Language specification](docs/language-spec.md) defines the draft v0 syntax
   and semantics, including explicitly deferred features.
+- [Canonical JSON](docs/canonical-json.md) documents the machine-readable
+  export format, including span offset conventions.
 - Public Rust API documentation can be generated with:
 
   ```bash
@@ -154,3 +156,8 @@ release version. Later-version ideas—including rich-document extraction,
 editable rich-text mappings, additional syntax, and RDF-like export—are listed
 under [Deferred And Open Issues](docs/language-spec.md#deferred-and-open-issues)
 in the language specification.
+
+## Licence
+
+Licensed under either of the [Apache License, Version 2.0](LICENSE-APACHE) or
+the [MIT license](LICENSE-MIT) at your option.
