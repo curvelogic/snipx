@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 #[derive(Debug, Parser)]
-#[command(name = "snipx")]
+#[command(name = "snipx", version)]
 struct Cli {
     #[command(subcommand)]
     command: Command,

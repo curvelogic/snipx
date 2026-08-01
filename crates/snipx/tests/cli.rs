@@ -33,6 +33,17 @@ fn help_lists_the_available_subcommands() {
 }
 
 #[test]
+fn version_flag_reports_the_crate_version() {
+    let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
+
+    command
+        .arg("--version")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(env!("CARGO_PKG_VERSION")));
+}
+
+#[test]
 fn check_subcommand_parses_successfully() {
     let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
 

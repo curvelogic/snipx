@@ -2019,7 +2019,7 @@ fn is_identifier_start(ch: char) -> bool {
 }
 
 fn is_identifier_continue(ch: char) -> bool {
-    ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '/')
+    ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-')
 }
 
 fn snippet_contains_range(source: &str, intralinea_close_aware: bool) -> bool {

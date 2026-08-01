@@ -74,6 +74,94 @@ fn diagnoses_subjectless_statement_without_ambient_subject() {
 }
 
 #[test]
+fn decodes_standard_escapes_in_ordinary_strings() {
+    let parsed =
+        parse_commentaria("Alice note \"Line one\\nTab\\there \\\"quoted\\\" back\\\\slash\".\n");
+    let expanded = expand(&parsed, ExpandOptions::default());
+
+    assert!(expanded.diagnostics.is_empty());
+    assert_eq!(
+        expanded.statements[0].object,
+        Value::String("Line one\nTab\there \"quoted\" back\\slash".into())
+    );
+}
+
+#[test]
+fn preserves_unknown_escape_sequences_verbatim() {
+    let parsed = parse_commentaria("Alice note \"odd \\q escape\".\n");
+    let expanded = expand(&parsed, ExpandOptions::default());
+
+    assert!(expanded.diagnostics.is_empty());
+    assert_eq!(
+        expanded.statements[0].object,
+        Value::String("odd \\q escape".into())
+    );
+}
+
+#[test]
+fn dedents_common_indentation_in_triple_strings() {
+    let parsed = parse_commentaria(
+        "[Alice] note \"\"\"\n  This is a longer note.\n\n  It can contain paragraphs.\n\"\"\".\n",
+    );
+    let expanded = expand(&parsed, ExpandOptions::default());
+
+    assert!(expanded.diagnostics.is_empty());
+    assert_eq!(
+        expanded.statements[0].object,
+        Value::String("This is a longer note.\n\nIt can contain paragraphs.\n".into())
+    );
+}
+
+#[test]
+fn triple_string_dedent_uses_minimum_indent_and_ignores_blank_lines() {
+    let parsed =
+        parse_commentaria("[Alice] note \"\"\"\n    deep\n  shallow\n\n      deeper\n  \"\"\".\n");
+    let expanded = expand(&parsed, ExpandOptions::default());
+
+    assert!(expanded.diagnostics.is_empty());
+    assert_eq!(
+        expanded.statements[0].object,
+        Value::String("  deep\nshallow\n\n    deeper\n".into())
+    );
+}
+
+#[test]
+fn single_line_triple_string_is_not_dedented() {
+    let parsed = parse_commentaria("[Alice] note \"\"\"inline text\"\"\".\n");
+    let expanded = expand(&parsed, ExpandOptions::default());
+
+    assert!(expanded.diagnostics.is_empty());
+    assert_eq!(
+        expanded.statements[0].object,
+        Value::String("inline text".into())
+    );
+}
+
+#[test]
+fn triple_strings_do_not_decode_escapes() {
+    let parsed = parse_commentaria("[Alice] note \"\"\"raw \\n stays\"\"\".\n");
+    let expanded = expand(&parsed, ExpandOptions::default());
+
+    assert!(expanded.diagnostics.is_empty());
+    assert_eq!(
+        expanded.statements[0].object,
+        Value::String("raw \\n stays".into())
+    );
+}
+
+#[test]
+fn line_comment_directly_after_identifier_does_not_join_it() {
+    let parsed = parse_commentaria("Alice friend Bob// trailing comment\n");
+    let expanded = expand(&parsed, ExpandOptions::default());
+
+    assert_eq!(expanded.statements.len(), 1);
+    assert_eq!(expanded.statements[0].object, Value::Name("Bob".into()));
+    // The only diagnostic is the missing statement terminator.
+    assert_eq!(expanded.diagnostics.len(), 1);
+    assert_eq!(expanded.diagnostics[0].code, DiagnosticCode::ParseError);
+}
+
+#[test]
 fn expands_subject_and_object_decorations_to_note_statements() {
     let parsed = parse_commentaria(
         "[Alice] ::\"protagonist\".\nAlice friend Bob ::\"childhood friend\", Clara ::\"rival\".\n",
