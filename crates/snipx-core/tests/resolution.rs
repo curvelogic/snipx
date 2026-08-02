@@ -457,6 +457,18 @@ fn mid_body_quotes_are_literal_target_text() {
 }
 
 #[test]
+fn triple_quoted_whole_body_decodes_delimiters() {
+    // The whole-body quote rule applies to triple-quoted parts too: the
+    // delimiters decode away and the inner text is the literal needle.
+    let visible = extract_visible_text("before [sic] after", Profile::Plain).unwrap();
+
+    assert_eq!(
+        match_snippet(&body_parts("\"\"\"[sic]\"\"\""), &visible, Profile::Plain).unwrap(),
+        vec![TextSpan { start: 7, end: 12 }]
+    );
+}
+
+#[test]
 fn quoted_braces_in_range_endpoints_stay_literal() {
     // The old matcher re-lexed unquoted endpoint text and could mistake
     // previously-quoted braces for captures.

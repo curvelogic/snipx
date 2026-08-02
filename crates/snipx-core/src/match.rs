@@ -229,7 +229,11 @@ fn assemble_pattern(
 }
 
 fn endpoint_needle(parts: &[SnippetPart]) -> Result<String, Diagnostic> {
-    let (needle, _) = assemble_pattern(parts)?;
+    let (needle, capture) = assemble_pattern(parts)?;
+    debug_assert!(
+        capture.is_none(),
+        "captures are rejected before endpoints are assembled"
+    );
     Ok(needle)
 }
 
