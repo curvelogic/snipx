@@ -3,6 +3,7 @@ use crate::expand::{
     ExpandResult, ExpandedStatement, LocalRegion, LocalScope, LocalSubject, Value,
 };
 use crate::r#match::{match_snippet, TextSpan};
+use crate::snippet::Cardinality;
 use crate::visible_text::{Profile, VisibleText};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -94,55 +95,58 @@ fn resolve_value(
         );
         return;
     }
-    let source = match value {
-        Value::Snippet(source) | Value::TextSpanSnippet(source) => source.clone(),
+    let snippet = match value {
+        Value::Snippet(snippet) | Value::TextSpanSnippet(snippet) => snippet.clone(),
         _ => return,
     };
-    let Some((body, cardinality)) = snippet_parts(&source) else {
-        diagnostics.push(diagnostic(
-            DiagnosticCode::InvalidSnippet,
-            format!("Invalid snippet syntax: {source}"),
-            source_span,
-        ));
-        *value = Value::Unresolved(source);
-        return;
-    };
 
-    let spans = match match_snippet(body, visible_text, profile) {
+    let spans = match match_snippet(&snippet.parts, visible_text, profile) {
+        // An unterminated snippet with no more specific lexical defect
+        // keeps the historical generic diagnostic.
+        Ok(_) if !snippet.terminated => {
+            diagnostics.push(diagnostic(
+                DiagnosticCode::InvalidSnippet,
+                format!("Invalid snippet syntax: {}", snippet.source),
+                source_span,
+            ));
+            *value = Value::Unresolved(snippet.source);
+            return;
+        }
         Ok(spans) => spans,
         Err(mut error) => {
             if error.span.is_none() {
                 error.span = source_span;
             }
             diagnostics.push(error);
-            *value = Value::Unresolved(source);
+            *value = Value::Unresolved(snippet.source);
             return;
         }
     };
 
-    let error_code = match cardinality {
+    let error_code = match snippet.cardinality {
         Cardinality::ExactlyOne if spans.is_empty() => Some(DiagnosticCode::SnippetNotFound),
         Cardinality::ExactlyOne if spans.len() > 1 => Some(DiagnosticCode::SnippetAmbiguous),
         Cardinality::OneOrMore if spans.is_empty() => Some(DiagnosticCode::SnippetNotFound),
         Cardinality::ZeroOrOne if spans.len() > 1 => Some(DiagnosticCode::SnippetAmbiguous),
         _ => None,
     };
-
     if let Some(code) = error_code {
         let message = match code {
-            DiagnosticCode::SnippetNotFound => format!("Snippet did not match: {source}"),
+            DiagnosticCode::SnippetNotFound => {
+                format!("Snippet did not match: {}", snippet.source)
+            }
             DiagnosticCode::SnippetAmbiguous => {
-                format!("Snippet matched more than allowed: {source}")
+                format!("Snippet matched more than allowed: {}", snippet.source)
             }
             _ => unreachable!(),
         };
         diagnostics.push(diagnostic(code, message, source_span));
-        *value = Value::Unresolved(source);
+        *value = Value::Unresolved(snippet.source);
         return;
     }
 
     resolutions.push(SnippetResolution {
-        source,
+        source: snippet.source,
         source_span,
         spans,
     });
@@ -330,27 +334,6 @@ fn line_ranges(chars: &[char]) -> Vec<(usize, usize)> {
     }
     lines.push((start, chars.len()));
     lines
-}
-
-#[derive(Debug, Clone, Copy)]
-enum Cardinality {
-    ExactlyOne,
-    OneOrMore,
-    ZeroOrMore,
-    ZeroOrOne,
-}
-
-fn snippet_parts(source: &str) -> Option<(&str, Cardinality)> {
-    let closing = source.rfind(']')?;
-    let body = source.strip_prefix('[')?.get(..closing - 1)?;
-    let cardinality = match &source[closing + 1..] {
-        "" => Cardinality::ExactlyOne,
-        "+" => Cardinality::OneOrMore,
-        "*" => Cardinality::ZeroOrMore,
-        "?" => Cardinality::ZeroOrOne,
-        _ => return None,
-    };
-    Some((body, cardinality))
 }
 
 fn diagnostic(

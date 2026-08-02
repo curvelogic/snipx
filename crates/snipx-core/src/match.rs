@@ -17,34 +17,6 @@ struct NormalizedText {
     ends: Vec<usize>,
 }
 
-pub fn match_snippet(
-    snippet_body: &str,
-    visible_text: &VisibleText,
-    profile: Profile,
-) -> Result<Vec<TextSpan>, Diagnostic> {
-    if let Some(separator) = range_separator(snippet_body)? {
-        if has_unquoted_capture(snippet_body) {
-            return Err(invalid(
-                DiagnosticCode::InvalidSnippet,
-                "Captures are not allowed inside range snippets",
-            ));
-        }
-        return match_range(snippet_body, separator, visible_text, profile);
-    }
-
-    match_capture(snippet_body, visible_text, profile)
-}
-
-fn match_capture(
-    body: &str,
-    visible_text: &VisibleText,
-    profile: Profile,
-) -> Result<Vec<TextSpan>, Diagnostic> {
-    let (pattern, capture) = strip_capture(body)?;
-    let pattern = unquote(&pattern);
-    match_pattern(&pattern, capture, visible_text, profile)
-}
-
 fn match_pattern(
     pattern: &str,
     capture: Option<std::ops::Range<usize>>,
@@ -100,61 +72,6 @@ fn match_pattern(
 }
 
 fn match_range(
-    body: &str,
-    separator: usize,
-    visible_text: &VisibleText,
-    profile: Profile,
-) -> Result<Vec<TextSpan>, Diagnostic> {
-    let start = unquote(&body[..separator]);
-    let end = unquote(&body[separator + 2..]);
-    let document_end = visible_text.text.chars().count();
-
-    match (start.is_empty(), end.is_empty()) {
-        (true, true) => Ok(vec![TextSpan {
-            start: 0,
-            end: document_end,
-        }]),
-        // Open ranges resolve like any other snippet: every candidate
-        // match of the open endpoint is a candidate span, and the
-        // caller's cardinality rules decide whether several candidates
-        // are ambiguous.
-        (true, false) => Ok(match_capture(&end, visible_text, profile)?
-            .into_iter()
-            .map(|end| TextSpan {
-                start: 0,
-                end: end.end,
-            })
-            .collect()),
-        (false, true) => Ok(match_capture(&start, visible_text, profile)?
-            .into_iter()
-            .map(|start| TextSpan {
-                start: start.start,
-                end: document_end,
-            })
-            .collect()),
-        (false, false) => {
-            let starts = match_capture(&start, visible_text, profile)?;
-            let ends = match_capture(&end, visible_text, profile)?;
-            let mut last_end = 0;
-            let mut ranges = Vec::new();
-            for start in starts {
-                if start.start < last_end {
-                    continue;
-                }
-                if let Some(end) = ends.iter().find(|end| end.start >= start.end) {
-                    ranges.push(TextSpan {
-                        start: start.start,
-                        end: end.end,
-                    });
-                    last_end = end.end;
-                }
-            }
-            Ok(ranges)
-        }
-    }
-}
-
-fn match_range_needles(
     start: &str,
     end: &str,
     visible_text: &VisibleText,
@@ -207,7 +124,7 @@ fn match_range_needles(
     }
 }
 
-pub fn match_snippet_parts(
+pub fn match_snippet(
     parts: &[SnippetPart],
     visible_text: &VisibleText,
     profile: Profile,
@@ -238,7 +155,7 @@ pub fn match_snippet_parts(
             .expect("separator counted above");
         let start = endpoint_needle(&parts[..split])?;
         let end = endpoint_needle(&parts[split + 1..])?;
-        return match_range_needles(&start, &end, visible_text, profile);
+        return match_range(&start, &end, visible_text, profile);
     }
 
     let (pattern, capture) = assemble_pattern(parts)?;
@@ -386,150 +303,6 @@ fn loose_replacement(character: char) -> Option<String> {
         '\u{fb04}' => Some("ffl".to_owned()),
         '\u{fb05}' | '\u{fb06}' => Some("st".to_owned()),
         _ => None,
-    }
-}
-
-fn strip_capture(body: &str) -> Result<(String, Option<std::ops::Range<usize>>), Diagnostic> {
-    let mut output = String::new();
-    let mut capture_start = None;
-    let mut capture = None;
-    let mut quoted = false;
-    let mut escaped = false;
-
-    for character in body.chars() {
-        if escaped {
-            output.push(character);
-            escaped = false;
-            continue;
-        }
-        if character == '\\' && quoted {
-            escaped = true;
-            output.push(character);
-            continue;
-        }
-        if character == '"' {
-            quoted = !quoted;
-            output.push(character);
-            continue;
-        }
-        if !quoted && character == '{' {
-            if capture_start.is_some() || capture.is_some() {
-                return Err(invalid(
-                    DiagnosticCode::InvalidSnippet,
-                    "A snippet may contain at most one capture",
-                ));
-            }
-            capture_start = Some(output.chars().count());
-            continue;
-        }
-        if !quoted && character == '}' {
-            let Some(start) = capture_start.take() else {
-                return Err(invalid(
-                    DiagnosticCode::InvalidSnippet,
-                    "Capture closing brace has no opener",
-                ));
-            };
-            capture = Some(start..output.chars().count());
-            continue;
-        }
-        output.push(character);
-    }
-
-    if quoted {
-        return Err(invalid(
-            DiagnosticCode::InvalidSnippet,
-            "Quoted snippet text is not terminated",
-        ));
-    }
-    if capture_start.is_some() {
-        return Err(invalid(
-            DiagnosticCode::InvalidSnippet,
-            "Capture is not terminated",
-        ));
-    }
-    if capture.as_ref().is_some_and(std::ops::Range::is_empty) {
-        return Err(invalid(
-            DiagnosticCode::InvalidSnippet,
-            "Capture may not be empty",
-        ));
-    }
-    Ok((output, capture))
-}
-
-fn range_separator(body: &str) -> Result<Option<usize>, Diagnostic> {
-    let characters: Vec<_> = body.char_indices().collect();
-    let mut quoted = false;
-    let mut escaped = false;
-    let mut capture_depth: usize = 0;
-    let mut found = None;
-
-    for index in 0..characters.len().saturating_sub(1) {
-        let (byte, character) = characters[index];
-        if escaped {
-            escaped = false;
-            continue;
-        }
-        if character == '\\' && quoted {
-            escaped = true;
-            continue;
-        }
-        if character == '"' {
-            quoted = !quoted;
-            continue;
-        }
-        if quoted {
-            continue;
-        }
-        match character {
-            '{' => capture_depth += 1,
-            '}' => capture_depth = capture_depth.saturating_sub(1),
-            '.' if capture_depth == 0 && characters[index + 1].1 == '.' => {
-                if found.is_some() {
-                    return Err(invalid(
-                        DiagnosticCode::InvalidSnippet,
-                        "A range snippet may contain only one range separator",
-                    ));
-                }
-                found = Some(byte);
-            }
-            _ => {}
-        }
-    }
-    Ok(found)
-}
-
-fn has_unquoted_capture(body: &str) -> bool {
-    let mut quoted = false;
-    let mut escaped = false;
-    for character in body.chars() {
-        if escaped {
-            escaped = false;
-            continue;
-        }
-        if character == '\\' && quoted {
-            escaped = true;
-            continue;
-        }
-        if character == '"' {
-            quoted = !quoted;
-        } else if !quoted && matches!(character, '{' | '}') {
-            return true;
-        }
-    }
-    false
-}
-
-/// Quotes delimit only when they wrap the entire body or range
-/// endpoint; the quote-escape is decoded only in that delimiting
-/// position. Anywhere else, quote and backslash characters are
-/// literal target text.
-fn unquote(value: &str) -> String {
-    match value
-        .strip_prefix('"')
-        .and_then(|value| value.strip_suffix('"'))
-    {
-        Some(inner) => inner.replace("\\\"", "\""),
-        None => value.to_owned(),
     }
 }
 

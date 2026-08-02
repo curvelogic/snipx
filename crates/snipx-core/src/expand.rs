@@ -1,6 +1,7 @@
 use crate::ast::{AstNode, Decoration, Statement};
 use crate::diagnostic::{Diagnostic, DiagnosticCode, Severity, SourceSpan};
 use crate::parser::Parse;
+use crate::snippet::SnippetValue;
 use crate::syntax::{SyntaxKind, SyntaxNode};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -12,8 +13,8 @@ pub enum Value {
     InvalidNumber(String),
     Boolean(bool),
     Uri(String),
-    Snippet(String),
-    TextSpanSnippet(String),
+    Snippet(SnippetValue),
+    TextSpanSnippet(SnippetValue),
     LocalSubject(LocalSubject),
     WholeDocument,
     Unresolved(String),
@@ -245,11 +246,16 @@ fn value_from_node(node: &SyntaxNode) -> Option<Value> {
         SyntaxKind::Snippet | SyntaxKind::RangeSnippet => {
             let value_text = node.to_string();
             let syntax = value_text.trim();
-            if let Some(syntax) = syntax.strip_prefix('~') {
-                Some(Value::TextSpanSnippet(syntax.to_owned()))
+            let (text_span, source) = match syntax.strip_prefix('~') {
+                Some(rest) => (true, rest),
+                None => (false, syntax),
+            };
+            let snippet = SnippetValue::from_node(&value_node, source.to_owned());
+            Some(if text_span {
+                Value::TextSpanSnippet(snippet)
             } else {
-                Some(Value::Snippet(syntax.to_owned()))
-            }
+                Value::Snippet(snippet)
+            })
         }
         SyntaxKind::Uri => Some(Value::Uri(
             text.strip_prefix('<')
