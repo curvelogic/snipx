@@ -103,23 +103,23 @@ fn match_range(
             start: 0,
             end: document_end,
         }]),
+        // Open ranges resolve like any other snippet: every candidate
+        // match of the open endpoint is a candidate span, and the
+        // caller's cardinality rules decide whether several candidates
+        // are ambiguous.
         (true, false) => Ok(match_capture(&end, visible_text, profile)?
             .into_iter()
-            .next()
             .map(|end| TextSpan {
                 start: 0,
                 end: end.end,
             })
-            .into_iter()
             .collect()),
         (false, true) => Ok(match_capture(&start, visible_text, profile)?
             .into_iter()
-            .next()
             .map(|start| TextSpan {
                 start: start.start,
                 end: document_end,
             })
-            .into_iter()
             .collect()),
         (false, false) => {
             let starts = match_capture(&start, visible_text, profile)?;
@@ -346,12 +346,18 @@ fn has_unquoted_capture(body: &str) -> bool {
     false
 }
 
+/// Quotes delimit only when they wrap the entire body or range
+/// endpoint; the quote-escape is decoded only in that delimiting
+/// position. Anywhere else, quote and backslash characters are
+/// literal target text.
 fn unquote(value: &str) -> String {
-    value
+    match value
         .strip_prefix('"')
         .and_then(|value| value.strip_suffix('"'))
-        .unwrap_or(value)
-        .replace("\\\"", "\"")
+    {
+        Some(inner) => inner.replace("\\\"", "\""),
+        None => value.to_owned(),
+    }
 }
 
 fn invalid(code: DiagnosticCode, message: &str) -> Diagnostic {

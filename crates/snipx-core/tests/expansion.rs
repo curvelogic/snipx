@@ -150,6 +150,24 @@ fn triple_strings_do_not_decode_escapes() {
 }
 
 #[test]
+fn negative_number_literals_are_supported() {
+    let parsed = parse_commentaria("Alice score -5; delta -0.25.\n");
+    let expanded = expand(&parsed, ExpandOptions::default());
+
+    assert!(expanded.diagnostics.is_empty());
+    assert_eq!(expanded.statements[0].object, Value::Number(-5.0));
+    assert_eq!(expanded.statements[1].object, Value::Number(-0.25));
+}
+
+#[test]
+fn bare_minus_without_digits_is_still_an_error() {
+    let parsed = parse_commentaria("Alice score -x.\n");
+    let expanded = expand(&parsed, ExpandOptions::default());
+
+    assert!(!expanded.diagnostics.is_empty());
+}
+
+#[test]
 fn line_comment_directly_after_identifier_does_not_join_it() {
     let parsed = parse_commentaria("Alice friend Bob// trailing comment\n");
     let expanded = expand(&parsed, ExpandOptions::default());
