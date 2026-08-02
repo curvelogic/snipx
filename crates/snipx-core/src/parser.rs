@@ -909,6 +909,13 @@ impl<'a> RegionParser<'a> {
                     has_error: true,
                 }
             }
+            Some('-') if self.at_negative_number() => {
+                self.parse_number();
+                ValueParseState {
+                    has_value: true,
+                    has_error: false,
+                }
+            }
             Some(ch) if ch.is_ascii_digit() => {
                 self.parse_number();
                 ValueParseState {
@@ -1004,6 +1011,10 @@ impl<'a> RegionParser<'a> {
                 self.token(SyntaxKind::Text, &ch.to_string());
                 self.pos += ch.len_utf8();
                 self.events.push(Event::Finish);
+                true
+            }
+            Some('-') if self.at_negative_number() => {
+                self.parse_number();
                 true
             }
             Some(ch) if ch.is_ascii_digit() => {
@@ -1334,8 +1345,19 @@ impl<'a> RegionParser<'a> {
         }
     }
 
+    fn at_negative_number(&self) -> bool {
+        self.peek_char() == Some('-')
+            && self.source[self.pos + 1..]
+                .chars()
+                .next()
+                .is_some_and(|ch| ch.is_ascii_digit())
+    }
+
     fn parse_number(&mut self) {
         let start = self.pos;
+        if self.peek_char() == Some('-') {
+            self.pos += 1;
+        }
         self.consume_while(|ch| ch.is_ascii_digit());
         if self.peek_char() == Some('.')
             && self.source[self.pos + 1..]
@@ -1495,6 +1517,7 @@ impl<'a> RegionParser<'a> {
             Some('[' | '{' | '"' | '<' | '`') => true,
             Some('~') => self.source[self.pos..].starts_with("~["),
             Some('+') | Some('*') | Some('?') => true,
+            Some('-') if self.at_negative_number() => true,
             Some(ch) if ch.is_ascii_digit() => true,
             Some(ch) if is_identifier_start(ch) => true,
             Some('=') if allow_equals => true,

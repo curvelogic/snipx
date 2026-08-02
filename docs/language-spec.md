@@ -179,7 +179,9 @@ A snippet is enclosed in square brackets.
 
 `[start..end]` resolves to the inclusive range beginning with `start`
 and ending with the first valid `end` after that selected `start`.
-Endpoint strings are included in the resolved range.
+Endpoint strings are included in the resolved range. A valid `end`
+match begins at or after the end of the selected `start` match:
+endpoint matches may not overlap, though they may be exactly adjacent.
 
 Open-ended ranges are inclusive:
 
@@ -191,7 +193,9 @@ Range matching is directional. For `[A..B]`, `B` is searched only after
 the selected occurrence of `A`.
 
 By default, a snippet must resolve to exactly one range. Zero matches or
-multiple matches are resolution errors.
+multiple matches are resolution errors. Open-ended ranges are no
+exception: when the text of an open range's endpoint matches more than
+once, resolution is ambiguous under the default cardinality.
 
 ### Quantifiers
 
@@ -243,6 +247,12 @@ and `..`:
 Quoted snippet bodies are very literal. Only the quote delimiter itself
 needs escaping. This rule is intentionally different from ordinary
 SnipX strings.
+
+Quotes delimit only when they wrap an entire snippet body or an entire
+range endpoint. Anywhere else inside a snippet body, quote characters
+are ordinary literal text and match quote characters in the target
+document; quote-escape processing applies only in the delimiting
+position.
 
 ### Captures And Context
 
@@ -331,7 +341,7 @@ Subjects and objects may be:
 - URI literals in `<...>`;
 - quoted strings;
 - triple-quoted strings;
-- numbers;
+- numbers, with an optional leading `-`;
 - booleans.
 
 Lowercase identifiers are predicates/properties. Capitalised identifiers

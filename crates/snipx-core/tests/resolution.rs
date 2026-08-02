@@ -149,16 +149,73 @@ fn range_matching_is_leftmost_first_and_non_overlapping() {
 }
 
 #[test]
-fn open_range_matching_is_non_overlapping() {
+fn open_ranges_return_every_candidate_for_cardinality_checks() {
     let visible = extract_visible_text("A End End", Profile::Plain).unwrap();
 
     assert_eq!(
         match_snippet("..End", &visible, Profile::Plain).unwrap(),
-        vec![TextSpan { start: 0, end: 5 }]
+        vec![TextSpan { start: 0, end: 5 }, TextSpan { start: 0, end: 9 }]
     );
     assert_eq!(
         match_snippet("A..", &visible, Profile::Plain).unwrap(),
         vec![TextSpan { start: 0, end: 9 }]
+    );
+}
+
+#[test]
+fn ambiguous_open_range_is_a_resolution_error() {
+    let visible = extract_visible_text("A End End", Profile::Plain).unwrap();
+    let parsed = parse(
+        "[..End] a Region.\n",
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    let expanded = expand(&parsed, ExpandOptions::default());
+    let resolved = resolve(&expanded, &visible, ResolveOptions::default());
+
+    assert!(resolved
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == DiagnosticCode::SnippetAmbiguous));
+}
+
+#[test]
+fn range_endpoints_may_not_overlap() {
+    let visible = extract_visible_text("abcd", Profile::Plain).unwrap();
+
+    // The end match must begin at or after the end of the start match.
+    assert_eq!(
+        match_snippet("abc..bcd", &visible, Profile::Plain).unwrap(),
+        Vec::<TextSpan>::new()
+    );
+    // Exact adjacency is allowed.
+    assert_eq!(
+        match_snippet("ab..cd", &visible, Profile::Plain).unwrap(),
+        vec![TextSpan { start: 0, end: 4 }]
+    );
+}
+
+#[test]
+fn quotes_inside_a_snippet_body_match_literally() {
+    let visible = extract_visible_text("said \"sic\" loudly", Profile::Plain).unwrap();
+
+    // Mid-body quotes are literal target text, not delimiters.
+    assert_eq!(
+        match_snippet("said \"sic\" loudly", &visible, Profile::Plain).unwrap(),
+        vec![TextSpan { start: 0, end: 17 }]
+    );
+    // Without quotes in the target, the quoted-looking body does not match.
+    let unquoted = extract_visible_text("said sic loudly", Profile::Plain).unwrap();
+    assert_eq!(
+        match_snippet("said \"sic\" loudly", &unquoted, Profile::Plain).unwrap(),
+        Vec::<TextSpan>::new()
+    );
+    // Whole-body quotes still delimit.
+    let bracketed = extract_visible_text("well [sic] indeed", Profile::Plain).unwrap();
+    assert_eq!(
+        match_snippet("\"[sic]\"", &bracketed, Profile::Plain).unwrap(),
+        vec![TextSpan { start: 5, end: 10 }]
     );
 }
 
