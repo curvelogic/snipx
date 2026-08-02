@@ -20,7 +20,7 @@ fn unresolved_snippets_remain_in_partial_facts() {
             "snipxVersion": "0.0",
             "implementation": {
                 "name": "snipx",
-                "version": "0.1.0"
+                "version": "0.1.1"
             },
             "input": {
                 "form": "commentaria",
