@@ -444,6 +444,41 @@ fn malformed_snippets_report_invalid_snippet() {
 }
 
 #[test]
+fn mid_body_quotes_are_literal_target_text() {
+    // Spec: quotes delimit only when wrapping the entire body. The old
+    // string matcher stripped any pattern that merely started and ended
+    // with a quote character.
+    let visible = extract_visible_text("\"a\" X \"b\"", Profile::Plain).unwrap();
+
+    assert_eq!(
+        match_snippet(&body_parts("\"a\" {X} \"b\""), &visible, Profile::Plain).unwrap(),
+        vec![TextSpan { start: 4, end: 5 }]
+    );
+}
+
+#[test]
+fn quoted_braces_in_range_endpoints_stay_literal() {
+    // The old matcher re-lexed unquoted endpoint text and could mistake
+    // previously-quoted braces for captures.
+    let visible = extract_visible_text("{a} middle end", Profile::Plain).unwrap();
+
+    assert_eq!(
+        match_snippet(&body_parts("\"{a}\"..end"), &visible, Profile::Plain).unwrap(),
+        vec![TextSpan { start: 0, end: 14 }]
+    );
+}
+
+#[test]
+fn quoted_empty_endpoint_is_open() {
+    let visible = extract_visible_text("A to B", Profile::Plain).unwrap();
+
+    assert_eq!(
+        match_snippet(&body_parts("\"\"..B"), &visible, Profile::Plain).unwrap(),
+        vec![TextSpan { start: 0, end: 6 }]
+    );
+}
+
+#[test]
 fn star_allows_zero_matches_and_question_rejects_multiple() {
     let visible = extract_visible_text("Alice met Alice.", Profile::Plain).unwrap();
 
