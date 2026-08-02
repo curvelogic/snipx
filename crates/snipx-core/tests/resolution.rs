@@ -1,6 +1,7 @@
 use snipx_core::{
-    expand, extract_visible_text, match_snippet, parse, resolve, DiagnosticCode, ExpandOptions,
-    InputForm, ParseOptions, Profile, ResolveOptions, TextSpan, Value,
+    expand, extract_visible_text, match_snippet, match_snippet_parts, parse, resolve,
+    DiagnosticCode, ExpandOptions, InputForm, ParseOptions, Profile, ResolveOptions, SnippetPart,
+    SnippetValue, SyntaxKind, TextSpan, Value,
 };
 
 fn expand_commentaria(source: &str) -> snipx_core::ExpandResult {
@@ -363,6 +364,71 @@ fn unresolved_snippet_remains_in_partial_result() {
         resolved.diagnostics[0].span,
         Some(snipx_core::SourceSpan { start: 0, end: 7 })
     );
+}
+
+fn body_parts(body: &str) -> Vec<SnippetPart> {
+    let parsed = parse(
+        &format!("[{body}] a Character.\n"),
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+    let node = parsed
+        .syntax()
+        .descendants()
+        .find(|node| matches!(node.kind(), SyntaxKind::Snippet | SyntaxKind::RangeSnippet))
+        .expect("body parses as a snippet");
+    let source = node.to_string();
+    SnippetValue::from_node(&node, source).parts
+}
+
+#[test]
+fn structured_matcher_agrees_with_string_matcher() {
+    let visible = extract_visible_text(
+        "Alice met Alice. She said \"sic\" loudly, from A to B.",
+        Profile::Plain,
+    )
+    .unwrap();
+
+    for body in [
+        "Alice",
+        " Alice ",
+        "met..loudly",
+        "..B",
+        "Alice met..",
+        "",
+        "\"\\\"sic\\\"\"",
+        "said {\"sic\"} loudly",
+        "met {Alice}",
+    ] {
+        assert_eq!(
+            match_snippet_parts(&body_parts(body), &visible, Profile::Plain),
+            match_snippet(body, &visible, Profile::Plain),
+            "{body:?}"
+        );
+    }
+}
+
+#[test]
+fn structured_matcher_preserves_invalid_snippet_errors() {
+    let visible = extract_visible_text("A to B", Profile::Plain).unwrap();
+
+    for (body, message) in [
+        ("{A}..B", "Captures are not allowed inside range snippets"),
+        (
+            "A..B..C",
+            "A range snippet may contain only one range separator",
+        ),
+        ("A {} B", "Capture may not be empty"),
+        ("A {b} {c}", "A snippet may contain at most one capture"),
+        ("A {to B", "Capture is not terminated"),
+        ("\"unterminated", "Quoted snippet text is not terminated"),
+    ] {
+        let diagnostic =
+            match_snippet_parts(&body_parts(body), &visible, Profile::Plain).unwrap_err();
+        assert_eq!(diagnostic.code, DiagnosticCode::InvalidSnippet, "{body:?}");
+        assert_eq!(diagnostic.message, message, "{body:?}");
+    }
 }
 
 #[test]

@@ -1,6 +1,7 @@
 use unicode_normalization::UnicodeNormalization;
 
 use crate::diagnostic::{Diagnostic, DiagnosticCode, Severity};
+use crate::snippet::SnippetPart;
 use crate::visible_text::{Profile, VisibleText};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,9 +41,19 @@ fn match_capture(
     profile: Profile,
 ) -> Result<Vec<TextSpan>, Diagnostic> {
     let (pattern, capture) = strip_capture(body)?;
+    let pattern = unquote(&pattern);
+    match_pattern(&pattern, capture, visible_text, profile)
+}
+
+fn match_pattern(
+    pattern: &str,
+    capture: Option<std::ops::Range<usize>>,
+    visible_text: &VisibleText,
+    profile: Profile,
+) -> Result<Vec<TextSpan>, Diagnostic> {
     let loose = matches!(profile, Profile::PlainLoose | Profile::MarkdownLoose);
     let haystack = normalize(&visible_text.text, loose);
-    let needle = normalize(&unquote(&pattern), loose);
+    let needle = normalize(pattern, loose);
 
     if needle.text.is_empty() {
         return Ok(vec![TextSpan {
@@ -141,6 +152,168 @@ fn match_range(
             Ok(ranges)
         }
     }
+}
+
+fn match_range_needles(
+    start: &str,
+    end: &str,
+    visible_text: &VisibleText,
+    profile: Profile,
+) -> Result<Vec<TextSpan>, Diagnostic> {
+    let document_end = visible_text.text.chars().count();
+
+    match (start.is_empty(), end.is_empty()) {
+        (true, true) => Ok(vec![TextSpan {
+            start: 0,
+            end: document_end,
+        }]),
+        // Open ranges resolve like any other snippet: every candidate
+        // match of the open endpoint is a candidate span, and the
+        // caller's cardinality rules decide whether several candidates
+        // are ambiguous.
+        (true, false) => Ok(match_pattern(end, None, visible_text, profile)?
+            .into_iter()
+            .map(|end| TextSpan {
+                start: 0,
+                end: end.end,
+            })
+            .collect()),
+        (false, true) => Ok(match_pattern(start, None, visible_text, profile)?
+            .into_iter()
+            .map(|start| TextSpan {
+                start: start.start,
+                end: document_end,
+            })
+            .collect()),
+        (false, false) => {
+            let starts = match_pattern(start, None, visible_text, profile)?;
+            let ends = match_pattern(end, None, visible_text, profile)?;
+            let mut last_end = 0;
+            let mut ranges = Vec::new();
+            for start in starts {
+                if start.start < last_end {
+                    continue;
+                }
+                if let Some(end) = ends.iter().find(|end| end.start >= start.end) {
+                    ranges.push(TextSpan {
+                        start: start.start,
+                        end: end.end,
+                    });
+                    last_end = end.end;
+                }
+            }
+            Ok(ranges)
+        }
+    }
+}
+
+pub fn match_snippet_parts(
+    parts: &[SnippetPart],
+    visible_text: &VisibleText,
+    profile: Profile,
+) -> Result<Vec<TextSpan>, Diagnostic> {
+    let separators = parts
+        .iter()
+        .filter(|part| matches!(part, SnippetPart::RangeSeparator))
+        .count();
+    if separators > 1 {
+        return Err(invalid(
+            DiagnosticCode::InvalidSnippet,
+            "A range snippet may contain only one range separator",
+        ));
+    }
+    if separators == 1 {
+        if parts
+            .iter()
+            .any(|part| matches!(part, SnippetPart::Capture { .. }))
+        {
+            return Err(invalid(
+                DiagnosticCode::InvalidSnippet,
+                "Captures are not allowed inside range snippets",
+            ));
+        }
+        let split = parts
+            .iter()
+            .position(|part| matches!(part, SnippetPart::RangeSeparator))
+            .expect("separator counted above");
+        let start = endpoint_needle(&parts[..split])?;
+        let end = endpoint_needle(&parts[split + 1..])?;
+        return match_range_needles(&start, &end, visible_text, profile);
+    }
+
+    let (pattern, capture) = assemble_pattern(parts)?;
+    match_pattern(&pattern, capture, visible_text, profile)
+}
+
+/// Spec ("Quoted Snippet Text"): quotes delimit only when they wrap an
+/// entire snippet body or an entire range endpoint; anywhere else they
+/// are literal target text.
+fn assemble_pattern(
+    parts: &[SnippetPart],
+) -> Result<(String, Option<std::ops::Range<usize>>), Diagnostic> {
+    if let [SnippetPart::Quoted {
+        decoded,
+        terminated,
+        ..
+    }] = parts
+    {
+        if !terminated {
+            return Err(invalid(
+                DiagnosticCode::InvalidSnippet,
+                "Quoted snippet text is not terminated",
+            ));
+        }
+        return Ok((decoded.clone(), None));
+    }
+
+    let mut pattern = String::new();
+    let mut capture = None;
+    for part in parts {
+        match part {
+            SnippetPart::Text(text) => pattern.push_str(text),
+            SnippetPart::Quoted {
+                raw, terminated, ..
+            } => {
+                if !terminated {
+                    return Err(invalid(
+                        DiagnosticCode::InvalidSnippet,
+                        "Quoted snippet text is not terminated",
+                    ));
+                }
+                pattern.push_str(raw);
+            }
+            SnippetPart::Capture { text, terminated } => {
+                if capture.is_some() {
+                    return Err(invalid(
+                        DiagnosticCode::InvalidSnippet,
+                        "A snippet may contain at most one capture",
+                    ));
+                }
+                if !terminated {
+                    return Err(invalid(
+                        DiagnosticCode::InvalidSnippet,
+                        "Capture is not terminated",
+                    ));
+                }
+                if text.is_empty() {
+                    return Err(invalid(
+                        DiagnosticCode::InvalidSnippet,
+                        "Capture may not be empty",
+                    ));
+                }
+                let start = pattern.chars().count();
+                pattern.push_str(text);
+                capture = Some(start..pattern.chars().count());
+            }
+            SnippetPart::RangeSeparator => unreachable!("handled by caller"),
+        }
+    }
+    Ok((pattern, capture))
+}
+
+fn endpoint_needle(parts: &[SnippetPart]) -> Result<String, Diagnostic> {
+    let (needle, _) = assemble_pattern(parts)?;
+    Ok(needle)
 }
 
 fn find_matches(haystack: &NormalizedText, needle: &str) -> Vec<std::ops::Range<usize>> {

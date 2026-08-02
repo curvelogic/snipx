@@ -25,7 +25,7 @@ pub use json::{
     JsonValue, JsonVisibleText,
 };
 pub use parser::{parse, Parse};
-pub use r#match::{match_snippet, TextSpan};
+pub use r#match::{match_snippet, match_snippet_parts, TextSpan};
 pub use resolve::{resolve, IntralineaAnchor, ResolveOptions, ResolveResult, SnippetResolution};
 pub use snippet::{Cardinality, SnippetPart, SnippetValue};
 pub use syntax::{SnipxLanguage, SyntaxKind, SyntaxNode, SyntaxToken};
