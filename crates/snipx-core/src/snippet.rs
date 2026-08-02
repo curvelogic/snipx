@@ -42,7 +42,6 @@ pub struct SnippetValue {
 impl SnippetValue {
     /// `node` must be a `Snippet` or `RangeSnippet` node.
     pub fn from_node(node: &SyntaxNode, source: String) -> SnippetValue {
-        let is_range = node.kind() == SyntaxKind::RangeSnippet;
         let mut parts = Vec::new();
         let mut cardinality = Cardinality::ExactlyOne;
         let mut terminated = false;
@@ -53,14 +52,6 @@ impl SnippetValue {
                     SyntaxKind::LBrack => {}
                     SyntaxKind::RBrack => terminated = true,
                     SyntaxKind::Dot => parts.push(SnippetPart::RangeSeparator),
-                    SyntaxKind::Text => {
-                        // In a range snippet, split text on ".." to create separators
-                        if is_range {
-                            split_on_range_separator(token.text(), &mut parts);
-                        } else {
-                            parts.push(SnippetPart::Text(token.text().to_owned()));
-                        }
-                    }
                     _ => parts.push(SnippetPart::Text(token.text().to_owned())),
                 },
                 NodeOrToken::Node(child) => match child.kind() {
@@ -96,21 +87,6 @@ impl SnippetValue {
             cardinality,
             terminated,
         }
-    }
-}
-
-/// Split text on ".." in a range snippet, creating RangeSeparator parts.
-fn split_on_range_separator(text: &str, parts: &mut Vec<SnippetPart>) {
-    let mut remaining = text;
-    while let Some(pos) = remaining.find("..") {
-        if pos > 0 {
-            parts.push(SnippetPart::Text(remaining[..pos].to_owned()));
-        }
-        parts.push(SnippetPart::RangeSeparator);
-        remaining = &remaining[pos + 2..];
-    }
-    if !remaining.is_empty() {
-        parts.push(SnippetPart::Text(remaining.to_owned()));
     }
 }
 
