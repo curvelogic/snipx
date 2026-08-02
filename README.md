@@ -150,7 +150,7 @@ Use `bd ready` to find available work and `bd show <id>` for details.
 ## Project Status
 
 The planned v0 Rust reference implementation is complete and released as
-v0.1.0. The language specification remains a draft. Later-version ideas—including rich-document extraction,
+v0.1.1. The language specification remains a draft. Later-version ideas—including rich-document extraction,
 editable rich-text mappings, additional syntax, and RDF-like export—are listed
 under [Deferred And Open Issues](docs/language-spec.md#deferred-and-open-issues)
 in the language specification.

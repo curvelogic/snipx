@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-02
+
 ### Changed
 
 - Snippet bodies are now lexed once, by the parser: the matcher consumes
@@ -46,5 +48,6 @@ First public release of the SnipX reference implementation.
   canonical document) and `fmt`, with documented exit codes.
 - Property tests, fuzz harness, snapshot suites, and CI.
 
-[Unreleased]: https://github.com/curvelogic/snipx/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/curvelogic/snipx/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/curvelogic/snipx/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/curvelogic/snipx/releases/tag/v0.1.0
