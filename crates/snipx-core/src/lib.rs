@@ -6,6 +6,7 @@ pub mod input;
 pub mod json;
 pub mod r#match;
 pub mod resolve;
+pub mod snippet;
 pub mod syntax;
 pub mod visible_text;
 
@@ -26,5 +27,6 @@ pub use json::{
 pub use parser::{parse, Parse};
 pub use r#match::{match_snippet, TextSpan};
 pub use resolve::{resolve, IntralineaAnchor, ResolveOptions, ResolveResult, SnippetResolution};
+pub use snippet::{Cardinality, SnippetPart, SnippetValue};
 pub use syntax::{SnipxLanguage, SyntaxKind, SyntaxNode, SyntaxToken};
 pub use visible_text::{extract_visible_text, Profile, VisibleText};

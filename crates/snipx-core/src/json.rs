@@ -374,8 +374,12 @@ fn json_value(value: Value) -> JsonValue {
         Value::InvalidNumber(source) => JsonValue::UnresolvedNumber { source },
         Value::Boolean(value) => JsonValue::Boolean { value },
         Value::Uri(value) => JsonValue::Uri { value },
-        Value::Snippet(source) => JsonValue::Snippet { source },
-        Value::TextSpanSnippet(source) => JsonValue::TextSpanSnippet { source },
+        Value::Snippet(snippet) => JsonValue::Snippet {
+            source: snippet.source,
+        },
+        Value::TextSpanSnippet(snippet) => JsonValue::TextSpanSnippet {
+            source: snippet.source,
+        },
         Value::LocalSubject(local) => {
             let scope = local_scope_name(local.scope).to_owned();
             let region = local_region_name(local.region).to_owned();

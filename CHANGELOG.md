@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Snippet bodies are now lexed once, by the parser: the matcher consumes
+  the structured CST instead of re-lexing strings. Diagnostics and JSON
+  output are unchanged for valid documents; a few pathological inputs
+  (embedded quotes mid-body, quoted braces in range endpoints) now follow
+  the spec's "quotes delimit only when they wrap an entire body or
+  endpoint" rule instead of the old string re-lexer's approximations.
+
 ## [0.1.0] - 2026-08-01
 
 First public release of the SnipX reference implementation.
