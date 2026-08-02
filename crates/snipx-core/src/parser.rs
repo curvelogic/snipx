@@ -1118,6 +1118,13 @@ impl<'a> RegionParser<'a> {
                 }
                 capture_count += 1;
                 text_start = self.pos;
+            } else if is_range && ch == '.' && self.source[self.pos + 1..].starts_with('.') {
+                if self.pos > text_start {
+                    self.token_from(SyntaxKind::Text, text_start, self.pos);
+                }
+                self.token(SyntaxKind::Dot, "..");
+                self.pos += 2;
+                text_start = self.pos;
             } else {
                 self.advance_char();
             }

@@ -2326,3 +2326,44 @@ fn indented_marginalia_fences_preserve_indent_and_parse_snipx_only() {
         .any(|node| node.kind() == SyntaxKind::Statement));
     assert_eq!(fence_body.text(), "console.log(\"not snipx\");\n");
 }
+
+#[test]
+fn range_snippet_tokenizes_separator() {
+    let parsed = parse(
+        "[\"A..a\"..End] a Scene.\n",
+        ParseOptions {
+            input_form: InputForm::Commentaria,
+        },
+    );
+
+    assert!(parsed.diagnostics().is_empty());
+    insta::assert_snapshot!(
+        parsed.debug_tree(),
+        @r###"
+ROOT
+  STATEMENT
+    SUBJECT
+      RANGE_SNIPPET
+        L_BRACK "["
+        QUOTED_SNIPPET_PART
+          STRING
+            QUOTE "\""
+            TEXT "A..a"
+            QUOTE "\""
+        DOT ".."
+        TEXT "End"
+        R_BRACK "]"
+    WHITESPACE " "
+    PREDICATE
+      IDENT
+        TEXT "a"
+    WHITESPACE " "
+    OBJECT_LIST
+      OBJECT
+        IDENT
+          TEXT "Scene"
+    DOT "."
+  WHITESPACE "\n"
+"###
+    );
+}
