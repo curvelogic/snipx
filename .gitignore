@@ -10,3 +10,7 @@
 
 # Rust build output
 target/
+
+# Node / pnpm
+node_modules/
+packages/*/dist/

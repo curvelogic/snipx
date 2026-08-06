@@ -1,0 +1,5 @@
+{
+  "name": "snipx-workspace",
+  "private": true,
+  "packageManager": "pnpm@8.14.1"
+}
