@@ -638,10 +638,7 @@ fn decorations_on_text_span_subjects_distribute() {
     // The decoration expands to one note statement, distributed over both spans.
     assert_eq!(resolved.statements.len(), 2);
     for statement in &resolved.statements {
-        assert!(matches!(
-            statement.subject,
-            Value::ResolvedTextSpan { .. }
-        ));
+        assert!(matches!(statement.subject, Value::ResolvedTextSpan { .. }));
         assert_eq!(statement.predicate, Value::Predicate("note".into()));
     }
 }

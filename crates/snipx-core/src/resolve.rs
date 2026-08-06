@@ -69,7 +69,12 @@ pub fn resolve(
             &mut result.resolutions,
             &mut result.diagnostics,
         );
-        distribute(statement, subject_spans, object_spans, &mut result.statements);
+        distribute(
+            statement,
+            subject_spans,
+            object_spans,
+            &mut result.statements,
+        );
     }
 
     result

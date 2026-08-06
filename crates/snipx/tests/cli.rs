@@ -551,3 +551,21 @@ fn ambient_values_use_the_core_expression_grammar() {
             .stdout(predicate::str::contains(expected));
     }
 }
+
+#[test]
+fn quantified_text_span_snippets_export_one_fact_per_span() {
+    let target = temp_file("distribute-target", "Alice met Alice.");
+    let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
+
+    command
+        .arg("export")
+        .arg("--target")
+        .arg(&target)
+        .write_stdin("~[Alice]+ highlight true.\n")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"span\":{\"start\":0,\"end\":5}"))
+        .stdout(predicate::str::contains(
+            "\"span\":{\"start\":10,\"end\":15}",
+        ));
+}
