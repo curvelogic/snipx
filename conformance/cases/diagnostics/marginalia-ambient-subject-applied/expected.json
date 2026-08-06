@@ -1,0 +1,41 @@
+{
+  "diagnostics": [],
+  "facts": [
+    {
+      "object": {
+        "kind": "string",
+        "value": "red"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "hair"
+      },
+      "source": {
+        "object": {
+          "end": 14,
+          "start": 9
+        },
+        "predicate": {
+          "end": 8,
+          "start": 4
+        },
+        "statement": {
+          "end": 15,
+          "start": 4
+        }
+      },
+      "subject": {
+        "kind": "name",
+        "value": "Alice"
+      }
+    }
+  ],
+  "input": {
+    "form": "marginalia"
+  },
+  "resolutions": [],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain"
+  }
+}

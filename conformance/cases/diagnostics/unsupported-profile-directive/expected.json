@@ -1,0 +1,59 @@
+{
+  "diagnostics": [
+    {
+      "code": "UNSUPPORTED_PROFILE",
+      "message": "Unsupported profile: rtf-loose",
+      "severity": "error",
+      "span": {
+        "end": 18,
+        "start": 9
+      }
+    }
+  ],
+  "facts": [
+    {
+      "object": {
+        "kind": "name",
+        "value": "Character"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 37,
+          "start": 28
+        },
+        "predicate": {
+          "end": 27,
+          "start": 26
+        },
+        "statement": {
+          "end": 38,
+          "start": 20
+        },
+        "subject": {
+          "end": 25,
+          "start": 20
+        }
+      },
+      "subject": {
+        "kind": "name",
+        "value": "Alice"
+      }
+    }
+  ],
+  "input": {
+    "form": "commentaria"
+  },
+  "resolutions": [],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain"
+  },
+  "visibleText": {
+    "length": 13,
+    "normalisation": "NFC"
+  }
+}

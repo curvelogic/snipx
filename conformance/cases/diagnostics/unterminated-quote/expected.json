@@ -1,0 +1,53 @@
+{
+  "diagnostics": [
+    {
+      "code": "UNTERMINATED_STRING",
+      "message": "Unterminated string",
+      "severity": "error",
+      "span": {
+        "end": 25,
+        "start": 1
+      }
+    },
+    {
+      "code": "UNTERMINATED_SNIPPET",
+      "message": "Unterminated snippet",
+      "severity": "error",
+      "span": {
+        "end": 25,
+        "start": 0
+      }
+    },
+    {
+      "code": "PARSE_ERROR",
+      "message": "Expected predicate after subject",
+      "severity": "error",
+      "span": {
+        "end": 25,
+        "start": 0
+      }
+    },
+    {
+      "code": "PARSE_ERROR",
+      "message": "Expected '.' statement terminator",
+      "severity": "error",
+      "span": {
+        "end": 25,
+        "start": 0
+      }
+    }
+  ],
+  "facts": [],
+  "input": {
+    "form": "commentaria"
+  },
+  "resolutions": [],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain"
+  },
+  "visibleText": {
+    "length": 6,
+    "normalisation": "NFC"
+  }
+}
