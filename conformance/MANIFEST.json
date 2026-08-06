@@ -1,11 +1,13 @@
 {
   "corpusVersion": "0.1.0",
   "specVersion": "0.1",
-  "caseCount": 2,
+  "caseCount": 43,
   "comparison": {
     "mode": "structural",
     "objectFieldOrder": "insensitive",
-    "excludedFields": ["implementation"],
+    "excludedFields": [
+      "implementation"
+    ],
     "informativeFields": [
       "diagnostics[].message",
       "diagnostics[].related[].message"

@@ -1,0 +1,59 @@
+{
+  "diagnostics": [
+    {
+      "code": "SNIPPET_NOT_FOUND",
+      "message": "Snippet did not match: [said \"sic\" loudly]",
+      "severity": "error",
+      "span": {
+        "end": 19,
+        "start": 0
+      }
+    }
+  ],
+  "facts": [
+    {
+      "object": {
+        "kind": "name",
+        "value": "Quote"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 27,
+          "start": 22
+        },
+        "predicate": {
+          "end": 21,
+          "start": 20
+        },
+        "statement": {
+          "end": 28,
+          "start": 0
+        },
+        "subject": {
+          "end": 19,
+          "start": 0
+        }
+      },
+      "subject": {
+        "kind": "unresolvedSnippet",
+        "source": "[said \"sic\" loudly]"
+      }
+    }
+  ],
+  "input": {
+    "form": "commentaria"
+  },
+  "resolutions": [],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain"
+  },
+  "visibleText": {
+    "length": 15,
+    "normalisation": "NFC"
+  }
+}

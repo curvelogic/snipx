@@ -1,0 +1,67 @@
+{
+  "diagnostics": [],
+  "facts": [
+    {
+      "object": {
+        "kind": "name",
+        "value": "Character"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 20,
+          "start": 11
+        },
+        "predicate": {
+          "end": 10,
+          "start": 9
+        },
+        "statement": {
+          "end": 21,
+          "start": 0
+        },
+        "subject": {
+          "end": 8,
+          "start": 0
+        }
+      },
+      "subject": {
+        "kind": "snippet",
+        "source": "[Alice]+"
+      }
+    }
+  ],
+  "input": {
+    "form": "commentaria"
+  },
+  "resolutions": [
+    {
+      "source": "[Alice]+",
+      "sourceSpan": {
+        "end": 8,
+        "start": 0
+      },
+      "spans": [
+        {
+          "end": 5,
+          "start": 0
+        },
+        {
+          "end": 15,
+          "start": 10
+        }
+      ]
+    }
+  ],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain"
+  },
+  "visibleText": {
+    "length": 16,
+    "normalisation": "NFC"
+  }
+}

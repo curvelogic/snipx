@@ -1,0 +1,63 @@
+{
+  "diagnostics": [],
+  "facts": [
+    {
+      "object": {
+        "kind": "name",
+        "value": "Letter"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 12,
+          "start": 6
+        },
+        "predicate": {
+          "end": 5,
+          "start": 4
+        },
+        "statement": {
+          "end": 13,
+          "start": 0
+        },
+        "subject": {
+          "end": 3,
+          "start": 0
+        }
+      },
+      "subject": {
+        "kind": "snippet",
+        "source": "[f]"
+      }
+    }
+  ],
+  "input": {
+    "form": "commentaria"
+  },
+  "resolutions": [
+    {
+      "source": "[f]",
+      "sourceSpan": {
+        "end": 3,
+        "start": 0
+      },
+      "spans": [
+        {
+          "end": 1,
+          "start": 0
+        }
+      ]
+    }
+  ],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain-loose"
+  },
+  "visibleText": {
+    "length": 1,
+    "normalisation": "NFC"
+  }
+}

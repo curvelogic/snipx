@@ -1,0 +1,59 @@
+{
+  "diagnostics": [
+    {
+      "code": "SNIPPET_NOT_FOUND",
+      "message": "Snippet did not match: [abc..bcd]",
+      "severity": "error",
+      "span": {
+        "end": 10,
+        "start": 0
+      }
+    }
+  ],
+  "facts": [
+    {
+      "object": {
+        "kind": "name",
+        "value": "Region"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 19,
+          "start": 13
+        },
+        "predicate": {
+          "end": 12,
+          "start": 11
+        },
+        "statement": {
+          "end": 20,
+          "start": 0
+        },
+        "subject": {
+          "end": 10,
+          "start": 0
+        }
+      },
+      "subject": {
+        "kind": "unresolvedSnippet",
+        "source": "[abc..bcd]"
+      }
+    }
+  ],
+  "input": {
+    "form": "commentaria"
+  },
+  "resolutions": [],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain"
+  },
+  "visibleText": {
+    "length": 4,
+    "normalisation": "NFC"
+  }
+}
