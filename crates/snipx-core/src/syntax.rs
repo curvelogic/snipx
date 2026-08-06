@@ -65,6 +65,7 @@ syntax_kinds! {
     LineComment => "LINE_COMMENT",
     BlockComment => "BLOCK_COMMENT",
     MarginaliaText => "MARGINALIA_TEXT",
+    SlashEmbedLine => "SLASH_EMBED_LINE",
     Fence => "FENCE",
     FenceInfo => "FENCE_INFO",
     FenceBody => "FENCE_BODY",

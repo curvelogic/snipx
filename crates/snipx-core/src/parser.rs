@@ -69,7 +69,7 @@ fn parse_marginalia(source: &str) -> Parse {
             let line_end = find_line_end(source, cursor);
             let content_end = line_content_end(source, line_end);
             let next_line = next_line_start(source, line_end);
-            events.push(Event::Start(SyntaxKind::LineComment));
+            events.push(Event::Start(SyntaxKind::SlashEmbedLine));
             if marker_start > cursor {
                 events.push(Event::Token(
                     SyntaxKind::Whitespace,
