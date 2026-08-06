@@ -1,6 +1,7 @@
 use crate::ast::{AstNode, Decoration, Statement};
 use crate::diagnostic::{Diagnostic, DiagnosticCode, Severity, SourceSpan};
 use crate::parser::Parse;
+use crate::r#match::TextSpan;
 use crate::snippet::SnippetValue;
 use crate::syntax::{SyntaxKind, SyntaxNode};
 
@@ -15,6 +16,12 @@ pub enum Value {
     Uri(String),
     Snippet(SnippetValue),
     TextSpanSnippet(SnippetValue),
+    /// A text-span snippet after resolution, pinned to one concrete
+    /// matched span. Produced only by resolve, never by expand.
+    ResolvedTextSpan {
+        snippet: SnippetValue,
+        span: TextSpan,
+    },
     LocalSubject(LocalSubject),
     WholeDocument,
     Unresolved(String),

@@ -42,14 +42,15 @@ pub fn resolve(
 ) -> ResolveResult {
     let profile = options.profile.unwrap_or(visible_text.profile);
     let mut result = ResolveResult {
-        statements: expanded.statements.clone(),
+        statements: Vec::new(),
         resolutions: Vec::new(),
         diagnostics: expanded.diagnostics.clone(),
     };
 
-    for statement in &mut result.statements {
+    for statement in &expanded.statements {
+        let mut statement = statement.clone();
         let subject_span = statement.subject_span.clone();
-        resolve_value(
+        let subject_spans = resolve_value(
             &mut statement.subject,
             subject_span,
             visible_text,
@@ -59,7 +60,7 @@ pub fn resolve(
             &mut result.diagnostics,
         );
         let object_span = statement.object_span.clone();
-        resolve_value(
+        let object_spans = resolve_value(
             &mut statement.object,
             object_span,
             visible_text,
@@ -68,9 +69,44 @@ pub fn resolve(
             &mut result.resolutions,
             &mut result.diagnostics,
         );
+        distribute(statement, subject_spans, object_spans, &mut result.statements);
     }
 
     result
+}
+
+/// Spec (Denotation And Text Spans): text-span snippets distribute one
+/// fact per matched span; both sides distributing yields the Cartesian
+/// product. Denotational values pass through as a single alternative.
+fn distribute(
+    statement: ExpandedStatement,
+    subject_spans: Option<Vec<TextSpan>>,
+    object_spans: Option<Vec<TextSpan>>,
+    statements: &mut Vec<ExpandedStatement>,
+) {
+    let subjects = value_alternatives(statement.subject.clone(), subject_spans);
+    let objects = value_alternatives(statement.object.clone(), object_spans);
+    for subject in &subjects {
+        for object in &objects {
+            let mut replica = statement.clone();
+            replica.subject = subject.clone();
+            replica.object = object.clone();
+            statements.push(replica);
+        }
+    }
+}
+
+fn value_alternatives(value: Value, spans: Option<Vec<TextSpan>>) -> Vec<Value> {
+    match (value, spans) {
+        (Value::TextSpanSnippet(snippet), Some(spans)) => spans
+            .into_iter()
+            .map(|span| Value::ResolvedTextSpan {
+                snippet: snippet.clone(),
+                span,
+            })
+            .collect(),
+        (value, _) => vec![value],
+    }
 }
 
 fn resolve_value(
@@ -81,7 +117,7 @@ fn resolve_value(
     anchors: &[IntralineaAnchor],
     resolutions: &mut Vec<SnippetResolution>,
     diagnostics: &mut Vec<Diagnostic>,
-) {
+) -> Option<Vec<TextSpan>> {
     if let Value::LocalSubject(local) = value {
         let local = local.clone();
         resolve_local_subject(
@@ -93,11 +129,12 @@ fn resolve_value(
             resolutions,
             diagnostics,
         );
-        return;
+        return None;
     }
+    let text_span = matches!(value, Value::TextSpanSnippet(_));
     let snippet = match value {
         Value::Snippet(snippet) | Value::TextSpanSnippet(snippet) => snippet.clone(),
-        _ => return,
+        _ => return None,
     };
 
     let spans = match match_snippet(&snippet.parts, visible_text, profile) {
@@ -110,7 +147,7 @@ fn resolve_value(
                 source_span,
             ));
             *value = Value::Unresolved(snippet.source);
-            return;
+            return None;
         }
         Ok(spans) => spans,
         Err(mut error) => {
@@ -119,7 +156,7 @@ fn resolve_value(
             }
             diagnostics.push(error);
             *value = Value::Unresolved(snippet.source);
-            return;
+            return None;
         }
     };
 
@@ -142,14 +179,15 @@ fn resolve_value(
         };
         diagnostics.push(diagnostic(code, message, source_span));
         *value = Value::Unresolved(snippet.source);
-        return;
+        return None;
     }
 
     resolutions.push(SnippetResolution {
         source: snippet.source,
         source_span,
-        spans,
+        spans: spans.clone(),
     });
+    text_span.then_some(spans)
 }
 
 fn resolve_local_subject(

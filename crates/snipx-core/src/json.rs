@@ -380,6 +380,9 @@ fn json_value(value: Value) -> JsonValue {
         Value::TextSpanSnippet(snippet) => JsonValue::TextSpanSnippet {
             source: snippet.source,
         },
+        Value::ResolvedTextSpan { snippet, .. } => JsonValue::TextSpanSnippet {
+            source: snippet.source,
+        },
         Value::LocalSubject(local) => {
             let scope = local_scope_name(local.scope).to_owned();
             let region = local_region_name(local.region).to_owned();
