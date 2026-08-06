@@ -4,6 +4,7 @@ use snipx_core::{export_json, ExportRequest, InputForm, Profile, Value};
 #[test]
 fn unresolved_snippets_remain_in_partial_facts() {
     let document = export_json(ExportRequest {
+        lint: false,
         source: "[Alice] a Character.\n".to_owned(),
         input_form: InputForm::Commentaria,
         target_text: Some("Bob waited.".to_owned()),
@@ -68,6 +69,7 @@ fn unresolved_snippets_remain_in_partial_facts() {
 #[test]
 fn resolved_export_includes_visible_text_facts_and_resolutions() {
     let document = export_json(ExportRequest {
+        lint: false,
         source: "[Alice] friend Bob.\n".to_owned(),
         input_form: InputForm::Commentaria,
         target_text: Some("Alice waited.".to_owned()),
@@ -112,6 +114,7 @@ fn resolved_export_includes_visible_text_facts_and_resolutions() {
 #[test]
 fn export_uses_ambient_subject_and_preserves_parser_diagnostics() {
     let document = export_json(ExportRequest {
+        lint: false,
         source: "/// a Character.\n".to_owned(),
         input_form: InputForm::Marginalia,
         target_text: None,
@@ -132,6 +135,7 @@ fn export_uses_ambient_subject_and_preserves_parser_diagnostics() {
 #[test]
 fn targetless_export_still_reports_the_effective_profile() {
     let document = export_json(ExportRequest {
+        lint: false,
         source: "Alice a Character.\n".to_owned(),
         input_form: InputForm::Commentaria,
         target_text: None,
@@ -148,6 +152,7 @@ fn targetless_export_still_reports_the_effective_profile() {
 #[test]
 fn programmatic_non_finite_numbers_are_diagnostic_partial_values() {
     let document = export_json(ExportRequest {
+        lint: false,
         source: "/// a Character.\n".to_owned(),
         input_form: InputForm::Marginalia,
         target_text: None,
@@ -168,6 +173,7 @@ fn programmatic_non_finite_numbers_are_diagnostic_partial_values() {
 #[test]
 fn intralinea_uses_host_text_as_its_implicit_target() {
     let document = export_json(ExportRequest {
+        lint: false,
         source: "Alice waited. {{[Alice] a Character.}}".to_owned(),
         input_form: InputForm::Intralinea,
         target_text: None,
@@ -197,6 +203,7 @@ fn intralinea_uses_host_text_as_its_implicit_target() {
 fn overflowing_source_number_preserves_its_lexeme_and_span() {
     let literal = "9".repeat(400);
     let document = export_json(ExportRequest {
+        lint: false,
         source: format!("Alice score {literal}.\n"),
         input_form: InputForm::Commentaria,
         target_text: None,
@@ -221,6 +228,7 @@ fn overflowing_source_number_preserves_its_lexeme_and_span() {
 #[test]
 fn export_honours_profile_directive_when_no_profile_is_requested() {
     let document = export_json(ExportRequest {
+        lint: false,
         source: "@profile plain-loose\n\n[Alice b] a Character.\n".to_owned(),
         input_form: InputForm::Commentaria,
         target_text: Some("Alice   b waited.".to_owned()),
@@ -242,6 +250,7 @@ fn export_honours_profile_directive_when_no_profile_is_requested() {
 #[test]
 fn requested_profile_overrides_profile_directive() {
     let document = export_json(ExportRequest {
+        lint: false,
         source: "@profile plain-loose\n\n[Alice b] a Character.\n".to_owned(),
         input_form: InputForm::Commentaria,
         target_text: Some("Alice   b waited.".to_owned()),
@@ -259,6 +268,7 @@ fn requested_profile_overrides_profile_directive() {
 #[test]
 fn unsupported_profile_directive_is_diagnosed_and_falls_back_to_plain() {
     let document = export_json(ExportRequest {
+        lint: false,
         source: "@profile rtf-loose\n\nAlice a Character.\n".to_owned(),
         input_form: InputForm::Commentaria,
         target_text: None,
@@ -278,6 +288,7 @@ fn unsupported_profile_directive_is_diagnosed_and_falls_back_to_plain() {
 #[test]
 fn target_directive_supplies_the_effective_target_uri() {
     let document = export_json(ExportRequest {
+        lint: false,
         source: "@target <chapter.txt>\n\nAlice a Character.\n".to_owned(),
         input_form: InputForm::Commentaria,
         target_text: None,
@@ -294,6 +305,7 @@ fn target_directive_supplies_the_effective_target_uri() {
 #[test]
 fn duplicate_directives_warn_and_first_occurrence_wins() {
     let document = export_json(ExportRequest {
+        lint: false,
         source: "@profile plain\n@profile plain-loose\n\nAlice a Character.\n".to_owned(),
         input_form: InputForm::Commentaria,
         target_text: None,
@@ -312,6 +324,7 @@ fn duplicate_directives_warn_and_first_occurrence_wins() {
 #[test]
 fn directives_outside_commentaria_do_not_select_the_profile() {
     let document = export_json(ExportRequest {
+        lint: false,
         source: "```\n@profile plain-loose\nAlice a Character.\n```\n".to_owned(),
         input_form: InputForm::Marginalia,
         target_text: None,
@@ -328,6 +341,7 @@ fn directives_outside_commentaria_do_not_select_the_profile() {
 #[test]
 fn markdown_export_includes_non_fatal_extraction_warnings() {
     let document = export_json(ExportRequest {
+        lint: false,
         source: "[Alice] a Character.\n".to_owned(),
         input_form: InputForm::Commentaria,
         target_text: Some("Alice <span>waited</span>.\n".to_owned()),

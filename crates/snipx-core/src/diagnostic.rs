@@ -31,6 +31,11 @@ pub enum DiagnosticCode {
     InvalidNumber,
     SnippetNotFound,
     SnippetAmbiguous,
+    // Fragility lint warnings. Provisional pending ratification of
+    // ADR 0004 (docs/adr/0004-fragility-diagnostics.md).
+    FragileShortAnchor,
+    FragileNearDuplicate,
+    FragileCaptureContext,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

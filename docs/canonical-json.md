@@ -1,11 +1,12 @@
 # Canonical JSON
 
 JSON is the canonical machine output of the reference implementation.
-`snipx check`, `snipx resolve`, and `snipx export` emit one JSON
-document on stdout; `--pretty` changes formatting only, never the
-schema. The three commands report nested slices of the same document:
-`check` emits the envelope and `diagnostics` only, `resolve` adds
-`visibleText` and `resolutions`, and `export` adds `facts`. The
+`snipx check`, `snipx lint`, `snipx resolve`, and `snipx export` emit
+one JSON document on stdout; `--pretty` changes formatting only, never
+the schema. The commands report nested slices of the same document:
+`check` emits the envelope and `diagnostics` only, `lint` is `check`
+plus fragility warnings in the same `diagnostics` array, `resolve`
+adds `visibleText` and `resolutions`, and `export` adds `facts`. The
 schema may still evolve, but this document describes the current
 contract for downstream tools.
 
@@ -61,7 +62,10 @@ contract for downstream tools.
   `source` text and `sourceSpan`.
 - `diagnostics` carry stable upper-snake codes and `error` or `warning`
   severity. Warnings do not affect the exit code unless `--strict` is
-  supplied.
+  supplied. The `FRAGILE_*` codes emitted by `snipx lint` are
+  provisional pending ratification of
+  [ADR 0004](adr/0004-fragility-diagnostics.md); they become part of
+  the stable contract only on ratification.
 
 ## Value kinds
 

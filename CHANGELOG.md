@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `snipx lint`: fragility diagnostics for resolved snippets, warning
+  when anchors are likely to break or re-bind under target edits —
+  `FRAGILE_SHORT_ANCHOR`, `FRAGILE_NEAR_DUPLICATE`, and
+  `FRAGILE_CAPTURE_CONTEXT`. Warnings only; resolution results and
+  exit codes are unchanged except under `--strict`. Codes are
+  provisional pending ratification of ADR 0004
+  (docs/adr/0004-fragility-diagnostics.md).
+
 ### Changed
 
 - The language specification now carries a two-part version (currently

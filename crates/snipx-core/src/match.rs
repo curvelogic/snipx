@@ -11,8 +11,8 @@ pub struct TextSpan {
 }
 
 #[derive(Debug)]
-struct NormalizedText {
-    text: String,
+pub(crate) struct NormalizedText {
+    pub(crate) text: String,
     starts: Vec<usize>,
     ends: Vec<usize>,
 }
@@ -165,7 +165,7 @@ pub fn match_snippet(
 /// Spec ("Quoted Snippet Text"): quotes delimit only when they wrap an
 /// entire snippet body or an entire range endpoint; anywhere else they
 /// are literal target text.
-fn assemble_pattern(
+pub(crate) fn assemble_pattern(
     parts: &[SnippetPart],
 ) -> Result<(String, Option<std::ops::Range<usize>>), Diagnostic> {
     if let [SnippetPart::Quoted {
@@ -237,7 +237,7 @@ fn endpoint_needle(parts: &[SnippetPart]) -> Result<String, Diagnostic> {
     Ok(needle)
 }
 
-fn find_matches(haystack: &NormalizedText, needle: &str) -> Vec<std::ops::Range<usize>> {
+pub(crate) fn find_matches(haystack: &NormalizedText, needle: &str) -> Vec<std::ops::Range<usize>> {
     let mut matches = Vec::new();
     let mut byte_cursor = 0;
 
@@ -253,7 +253,7 @@ fn find_matches(haystack: &NormalizedText, needle: &str) -> Vec<std::ops::Range<
     matches
 }
 
-fn normalize(input: &str, loose: bool) -> NormalizedText {
+pub(crate) fn normalize(input: &str, loose: bool) -> NormalizedText {
     let nfc: String = input.nfc().collect();
     let mut text = String::new();
     let mut starts = Vec::new();
