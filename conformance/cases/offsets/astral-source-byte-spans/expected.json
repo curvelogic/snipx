@@ -1,0 +1,91 @@
+{
+  "diagnostics": [
+    {
+      "code": "SNIPPET_NOT_FOUND",
+      "message": "Snippet did not match: [Alice]",
+      "severity": "error",
+      "span": {
+        "end": 28,
+        "start": 21
+      }
+    }
+  ],
+  "facts": [
+    {
+      "object": {
+        "kind": "string",
+        "value": "𝄞😀"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "says"
+      },
+      "source": {
+        "object": {
+          "end": 19,
+          "start": 9
+        },
+        "predicate": {
+          "end": 8,
+          "start": 4
+        },
+        "statement": {
+          "end": 20,
+          "start": 0
+        },
+        "subject": {
+          "end": 3,
+          "start": 0
+        }
+      },
+      "subject": {
+        "kind": "name",
+        "value": "Bob"
+      }
+    },
+    {
+      "object": {
+        "kind": "name",
+        "value": "Character"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 40,
+          "start": 31
+        },
+        "predicate": {
+          "end": 30,
+          "start": 29
+        },
+        "statement": {
+          "end": 41,
+          "start": 21
+        },
+        "subject": {
+          "end": 28,
+          "start": 21
+        }
+      },
+      "subject": {
+        "kind": "unresolvedSnippet",
+        "source": "[Alice]"
+      }
+    }
+  ],
+  "input": {
+    "form": "commentaria"
+  },
+  "resolutions": [],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain"
+  },
+  "visibleText": {
+    "length": 11,
+    "normalisation": "NFC"
+  }
+}
