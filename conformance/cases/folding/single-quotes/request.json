@@ -1,0 +1,6 @@
+{
+  "source": "[say 'tis now]+ a Phrase.\n",
+  "inputForm": "commentaria",
+  "targetText": "say ‘tis now say ’tis now say ‚tis now say ‛tis now",
+  "profile": "plain-loose"
+}

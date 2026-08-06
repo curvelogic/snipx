@@ -1,0 +1,6 @@
+{
+  "source": "[say \"x\" now]+ a Phrase.\n",
+  "inputForm": "commentaria",
+  "targetText": "say “x” now say „x‟ now",
+  "profile": "plain-loose"
+}

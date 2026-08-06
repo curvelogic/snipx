@@ -1,0 +1,6 @@
+{
+  "source": "[one two three] a Phrase.\n",
+  "inputForm": "commentaria",
+  "targetText": "one \t two\n\n  three",
+  "profile": "plain-loose"
+}

@@ -1,0 +1,6 @@
+{
+  "source": "[A-B]+ a Pair.\n",
+  "inputForm": "commentaria",
+  "targetText": "A‐B A‑B A‒B A–B A—B A−B",
+  "profile": "plain-loose"
+}
