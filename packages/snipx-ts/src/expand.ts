@@ -72,7 +72,7 @@ export function expand(parse: Parse, options: ExpandOptions): ExpandResult {
 
   for (const node of parse.root.descendants()) {
     if (node.kind === "Statement") {
-      expandStatement(node, options, result, parse);
+      expandStatement(node, options, result);
     }
   }
 
@@ -83,7 +83,6 @@ function expandStatement(
   statement: SyntaxNode,
   options: ExpandOptions,
   result: ExpandResult,
-  parse: Parse,
 ): void {
   const statementSpan = nodeSpan(statement);
   const explicitSubject = statementSubject(statement);
@@ -154,7 +153,6 @@ function expandStatement(
       }
     }
   }
-  void parse;
 }
 
 function pushDecoration(
