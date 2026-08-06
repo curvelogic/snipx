@@ -1,0 +1,65 @@
+{
+  "diagnostics": [],
+  "facts": [
+    {
+      "object": {
+        "kind": "name",
+        "value": "Doors"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "theme"
+      },
+      "source": {
+        "object": {
+          "end": 29,
+          "start": 24
+        },
+        "predicate": {
+          "end": 23,
+          "start": 18
+        },
+        "statement": {
+          "end": 29,
+          "start": 15
+        },
+        "subject": {
+          "end": 17,
+          "start": 15
+        }
+      },
+      "subject": {
+        "kind": "localSubject",
+        "marker": "<>",
+        "region": "whole",
+        "scope": "sentence"
+      }
+    }
+  ],
+  "input": {
+    "form": "intralinea"
+  },
+  "resolutions": [
+    {
+      "source": "<>",
+      "sourceSpan": {
+        "end": 17,
+        "start": 15
+      },
+      "spans": [
+        {
+          "end": 23,
+          "start": 0
+        }
+      ]
+    }
+  ],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain"
+  },
+  "visibleText": {
+    "length": 35,
+    "normalisation": "NFC"
+  }
+}
