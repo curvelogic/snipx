@@ -1,0 +1,7 @@
+{
+  "source": "[Alice] friend Bob.\n",
+  "inputForm": "commentaria",
+  "targetText": "Alice waited.",
+  "profile": "plain",
+  "targetUri": "chapter.txt"
+}

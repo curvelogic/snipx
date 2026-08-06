@@ -1,0 +1,60 @@
+{
+  "diagnostics": [
+    {
+      "code": "SNIPPET_NOT_FOUND",
+      "message": "Snippet did not match: [Alice]",
+      "severity": "error",
+      "span": {
+        "end": 7,
+        "start": 0
+      }
+    }
+  ],
+  "facts": [
+    {
+      "object": {
+        "kind": "name",
+        "value": "Character"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 19,
+          "start": 10
+        },
+        "predicate": {
+          "end": 9,
+          "start": 8
+        },
+        "statement": {
+          "end": 20,
+          "start": 0
+        },
+        "subject": {
+          "end": 7,
+          "start": 0
+        }
+      },
+      "subject": {
+        "kind": "unresolvedSnippet",
+        "source": "[Alice]"
+      }
+    }
+  ],
+  "input": {
+    "form": "commentaria",
+    "path": "notes.snipx"
+  },
+  "resolutions": [],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain"
+  },
+  "visibleText": {
+    "length": 11,
+    "normalisation": "NFC"
+  }
+}
