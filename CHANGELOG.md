@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The language specification now carries a two-part version (currently
   0.1) with a changelog section; `snipxVersion` in canonical JSON
   output mirrors it, changing from `"0.0"` to `"0.1"`.
+- Markdown visible text now parses GitHub-style footnotes and tables
+  (ADR 0003). Footnote definition text is inserted at each reference
+  point and no longer appears at the definition site; undefined
+  references stay literal. Table rows are newline-delimited and cells
+  space-separated. Documents using footnote or table syntax extract
+  different visible text than before, so offsets over such documents
+  shift.
 
 ### Fixed
 
