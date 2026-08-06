@@ -374,7 +374,7 @@ fn export_pretty_prints_partial_json_and_returns_one_for_errors() {
         .write_stdin("[Alice] a Character.\n")
         .assert()
         .code(1)
-        .stdout(predicate::str::contains("\"snipxVersion\": \"0.0\""))
+        .stdout(predicate::str::contains("\"snipxVersion\": \"0.1\""))
         .stdout(predicate::str::contains("SNIPPET_NOT_FOUND"));
 
     fs::remove_file(target).expect("temp target should be removable");

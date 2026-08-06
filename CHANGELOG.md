@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The language specification now carries a two-part version (currently
+  0.1) with a changelog section; `snipxVersion` in canonical JSON
+  output mirrors it, changing from `"0.0"` to `"0.1"`.
+
 ### Fixed
 
 - Text-span snippets (`~[...]`) now distribute one fact per matched
