@@ -1,7 +1,7 @@
 {
   "corpusVersion": "0.1.0",
   "specVersion": "0.1",
-  "caseCount": 56,
+  "caseCount": 62,
   "comparison": {
     "mode": "structural",
     "objectFieldOrder": "insensitive",
