@@ -68,6 +68,14 @@ contract for downstream tools.
 (including any `~` sigil stripped into the kind and any quantifier);
 the other kinds carry a decoded `value`.
 
+A resolved `textSpanSnippet` value also carries the concrete matched
+`span` it distributes over. Text-span snippets distribute: a statement
+whose subject or object is a text-span snippet emits one fact per
+matched span (the Cartesian product when both sides are text-span
+snippets), each fact's value carrying its own `span`. Denotational
+`snippet` values collapse to a single fact and never carry `span`.
+`span` is omitted when resolution did not run (no target text).
+
 ## Span offset conventions
 
 Two different offset units appear in the document. They share the
@@ -82,9 +90,10 @@ slicing the original input and for editor integrations that work in
 bytes.
 
 **Resolution spans are Unicode scalar offsets.** `resolutions[].spans`
-address the *canonical visible text* of the target document — after
-extraction and NFC normalisation — counted in Unicode scalar values
-(Rust `char`s), not bytes. `visibleText.length` is measured in the same
+and the `span` field on `textSpanSnippet` fact values address the
+*canonical visible text* of the target document — after extraction and
+NFC normalisation — counted in Unicode scalar values (Rust `char`s),
+not bytes. `visibleText.length` is measured in the same
 unit. UI and host integrations may map these positions to grapheme
 clusters or native document positions.
 

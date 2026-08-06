@@ -130,6 +130,8 @@ pub enum JsonValue {
     },
     TextSpanSnippet {
         source: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<JsonSpan>,
     },
     LocalSubject {
         marker: String,
@@ -379,9 +381,11 @@ fn json_value(value: Value) -> JsonValue {
         },
         Value::TextSpanSnippet(snippet) => JsonValue::TextSpanSnippet {
             source: snippet.source,
+            span: None,
         },
-        Value::ResolvedTextSpan { snippet, .. } => JsonValue::TextSpanSnippet {
+        Value::ResolvedTextSpan { snippet, span } => JsonValue::TextSpanSnippet {
             source: snippet.source,
+            span: Some(json_text_span(span)),
         },
         Value::LocalSubject(local) => {
             let scope = local_scope_name(local.scope).to_owned();

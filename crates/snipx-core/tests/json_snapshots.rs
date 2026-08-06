@@ -353,3 +353,91 @@ fn markdown_export_includes_non_fatal_extraction_warnings() {
                 && diagnostic["span"].is_object()
         }));
 }
+
+#[test]
+fn quantified_text_span_facts_distribute_per_span() {
+    let document = export_json(ExportRequest {
+        source: "~[Alice]+ highlight true.\n".to_owned(),
+        input_form: InputForm::Commentaria,
+        target_text: Some("Alice met Alice.".to_owned()),
+        profile: Some(Profile::Plain),
+        path: None,
+        target_uri: None,
+        ambient_subject: None,
+    });
+    let value = serde_json::to_value(document).unwrap();
+
+    assert_eq!(
+        value,
+        json!({
+            "snipxVersion": "0.0",
+            "implementation": {
+                "name": "snipx",
+                "version": "0.1.1"
+            },
+            "input": {
+                "form": "commentaria"
+            },
+            "target": {
+                "profile": "plain"
+            },
+            "visibleText": {
+                "normalisation": "NFC",
+                "length": 16
+            },
+            "facts": [
+                {
+                    "subject": {
+                        "kind": "textSpanSnippet",
+                        "source": "[Alice]+",
+                        "span": {"start": 0, "end": 5}
+                    },
+                    "predicate": {
+                        "kind": "predicate",
+                        "value": "highlight"
+                    },
+                    "object": {
+                        "kind": "boolean",
+                        "value": true
+                    },
+                    "source": {
+                        "statement": {"start": 0, "end": 25},
+                        "subject": {"start": 0, "end": 9},
+                        "predicate": {"start": 10, "end": 19},
+                        "object": {"start": 20, "end": 24}
+                    }
+                },
+                {
+                    "subject": {
+                        "kind": "textSpanSnippet",
+                        "source": "[Alice]+",
+                        "span": {"start": 10, "end": 15}
+                    },
+                    "predicate": {
+                        "kind": "predicate",
+                        "value": "highlight"
+                    },
+                    "object": {
+                        "kind": "boolean",
+                        "value": true
+                    },
+                    "source": {
+                        "statement": {"start": 0, "end": 25},
+                        "subject": {"start": 0, "end": 9},
+                        "predicate": {"start": 10, "end": 19},
+                        "object": {"start": 20, "end": 24}
+                    }
+                }
+            ],
+            "resolutions": [{
+                "source": "[Alice]+",
+                "sourceSpan": {"start": 0, "end": 9},
+                "spans": [
+                    {"start": 0, "end": 5},
+                    {"start": 10, "end": 15}
+                ]
+            }],
+            "diagnostics": []
+        })
+    );
+}
