@@ -157,11 +157,31 @@ fn parse_request(case_dir: &Path) -> ExportRequest {
     }
 }
 
+/// Rebuild a value with object keys in sorted order, recursively. This
+/// keeps stored files and comparison sort keys stable regardless of
+/// whether serde_json was built with `preserve_order` (a workspace
+/// feature-unification detail the corpus must not depend on).
+fn sort_keys(value: &Value) -> Value {
+    match value {
+        Value::Object(object) => {
+            let mut keys: Vec<&String> = object.keys().collect();
+            keys.sort();
+            let mut sorted = Map::new();
+            for key in keys {
+                sorted.insert(key.clone(), sort_keys(&object[key]));
+            }
+            Value::Object(sorted)
+        }
+        Value::Array(items) => Value::Array(items.iter().map(sort_keys).collect()),
+        other => other.clone(),
+    }
+}
+
 /// Reduce a document to its comparable form per the MANIFEST contract:
 /// drop the implementation block, drop informative message fields, and
 /// sort diagnostics into a canonical order.
 fn comparable(document: &Value) -> Value {
-    let mut document = document.clone();
+    let mut document = sort_keys(document);
     let object = document
         .as_object_mut()
         .expect("export document must be an object");
@@ -195,7 +215,7 @@ fn stored_form(request: ExportRequest) -> Value {
         .as_object_mut()
         .expect("export document must be an object")
         .remove("implementation");
-    value
+    sort_keys(&value)
 }
 
 #[test]
