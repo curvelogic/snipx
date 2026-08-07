@@ -378,6 +378,7 @@ fn quantified_text_span_facts_distribute_per_span() {
         path: None,
         target_uri: None,
         ambient_subject: None,
+        lint: false,
     });
     let value = serde_json::to_value(document).unwrap();
 
