@@ -82,6 +82,123 @@ fn markdown_omits_raw_html_with_source_located_warnings() {
 }
 
 #[test]
+fn markdown_inlines_footnote_text_at_reference_point() {
+    let source = "Alice[^1] went home.\n\n[^1]: The heroine.\n";
+    let visible = extract_visible_text(source, Profile::Markdown).unwrap();
+
+    // The definition text appears at the reference point, delimited
+    // like any other block, and is not repeated at its definition site.
+    assert_eq!(visible.text, "Alice\nThe heroine.\n went home.\n");
+    assert!(visible.diagnostics.is_empty());
+
+    // Spans returned by matching are Unicode-scalar offsets into the
+    // inlined visible text.
+    assert_eq!(
+        match_snippet(&body_parts("The heroine"), &visible, Profile::Markdown).unwrap(),
+        vec![TextSpan { start: 6, end: 17 }]
+    );
+    assert_eq!(
+        match_snippet(&body_parts("went home"), &visible, Profile::Markdown).unwrap(),
+        vec![TextSpan { start: 20, end: 29 }]
+    );
+}
+
+#[test]
+fn markdown_inlines_footnote_text_at_every_reference() {
+    let source = "A[^n] and B[^n].\n\n[^n]: note\n";
+    let visible = extract_visible_text(source, Profile::Markdown).unwrap();
+
+    assert_eq!(visible.text, "A\nnote\n and B\nnote\n.\n");
+    assert_eq!(
+        match_snippet(&body_parts("note"), &visible, Profile::Markdown).unwrap(),
+        vec![
+            TextSpan { start: 2, end: 6 },
+            TextSpan { start: 14, end: 18 }
+        ]
+    );
+}
+
+#[test]
+fn markdown_keeps_undefined_footnote_reference_as_literal_text() {
+    let visible = extract_visible_text("See[^missing] here.\n", Profile::Markdown).unwrap();
+
+    // GitHub-style footnotes: a reference with no definition is not
+    // footnote syntax at all, so its characters stay visible verbatim.
+    assert_eq!(visible.text, "See[^missing] here.\n");
+    assert!(visible.diagnostics.is_empty());
+    assert_eq!(
+        match_snippet(&body_parts("here"), &visible, Profile::Markdown).unwrap(),
+        vec![TextSpan { start: 14, end: 18 }]
+    );
+}
+
+#[test]
+fn markdown_footnote_self_reference_is_inlined_once() {
+    let source = "X[^a].\n\n[^a]: sees [^a] itself\n";
+    let visible = extract_visible_text(source, Profile::Markdown).unwrap();
+
+    // A cyclic reference cannot re-inline the footnote currently being
+    // inserted; the inner reference contributes nothing.
+    assert_eq!(visible.text, "X\nsees  itself\n.\n");
+}
+
+#[test]
+fn markdown_first_footnote_definition_wins() {
+    let source = "R[^d].\n\n[^d]: first\n\n[^d]: second\n";
+    let visible = extract_visible_text(source, Profile::Markdown).unwrap();
+
+    assert_eq!(visible.text, "R\nfirst\n.\n");
+}
+
+#[test]
+fn markdown_inlines_multi_block_footnote_definitions() {
+    let source = "P[^m].\n\n[^m]: one\n\n    two\n";
+    let visible = extract_visible_text(source, Profile::Markdown).unwrap();
+
+    assert_eq!(visible.text, "P\none\ntwo\n.\n");
+}
+
+#[test]
+fn markdown_renders_table_rows_and_cells() {
+    let source = "| Name | Age |\n| --- | --- |\n| Alice | 30 |\n| Bob | 41 |\n";
+    let visible = extract_visible_text(source, Profile::Markdown).unwrap();
+
+    // Cells are space-separated within a row; rows are newline-separated
+    // like every other block boundary.
+    assert_eq!(visible.text, "Name Age\nAlice 30\nBob 41\n");
+    assert!(visible.diagnostics.is_empty());
+    assert_eq!(
+        match_snippet(&body_parts("Alice 30"), &visible, Profile::Markdown).unwrap(),
+        vec![TextSpan { start: 9, end: 17 }]
+    );
+}
+
+#[test]
+fn markdown_table_empty_cells_do_not_double_separators() {
+    let source = "| a |  | b |\n| - | - | - |\n| 1 |  | 2 |\n";
+    let visible = extract_visible_text(source, Profile::Markdown).unwrap();
+
+    assert_eq!(visible.text, "a b\n1 2\n");
+}
+
+#[test]
+fn footnote_and_table_extraction_is_consistent_across_profiles() {
+    let source = "T[^1] | left | right |\n\n[^1]: note\n\n| a | b |\n| - | - |\n| c | d |\n";
+
+    // Both Markdown profiles extract identical visible text.
+    let exact = extract_visible_text(source, Profile::Markdown).unwrap();
+    let loose = extract_visible_text(source, Profile::MarkdownLoose).unwrap();
+    assert_eq!(exact.text, loose.text);
+    assert_eq!(exact.text, "T\nnote\n | left | right |\na b\nc d\n");
+
+    // Plain profiles keep Markdown syntax literal (NFC only).
+    let plain = extract_visible_text(source, Profile::Plain).unwrap();
+    let plain_loose = extract_visible_text(source, Profile::PlainLoose).unwrap();
+    assert_eq!(plain.text, source);
+    assert_eq!(plain_loose.text, source);
+}
+
+#[test]
 fn exact_matching_returns_unicode_scalar_offsets() {
     let visible = extract_visible_text("é Alice Alice", Profile::Plain).unwrap();
     let spans = match_snippet(&body_parts("Alice"), &visible, Profile::Plain).unwrap();
