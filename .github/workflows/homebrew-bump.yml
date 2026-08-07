@@ -1,24 +1,8 @@
 name: Homebrew bump
 
-# When a release is PUBLISHED (Greg publishing the draft staged by release.yml),
-# regenerate Formula/snipx.rb from the release's four per-target `.sha256`
-# assets and open a PR against curvelogic/homebrew-tap. A PR, not a direct
-# commit, so the tap change stays human-visible and revertable.
-#
-# The formula is produced by the committed, locally-testable script
-# `scripts/generate-homebrew-formula.sh` — all-or-nothing: any missing or
-# malformed checksum asset fails the job before anything is written, so the tap
-# can never receive a half-updated formula.
-#
-# Cross-repo write needs a dedicated secret: `HOMEBREW_TAP_TOKEN`, a
-# fine-grained PAT restricted to curvelogic/homebrew-tap with Contents:
-# read+write and Pull requests: read+write. The default GITHUB_TOKEN cannot
-# write to another repository. The secret is used ONLY in the final tap-push
-# step; every other step runs with the read-only default token. Until the
-# secret exists the workflow fails loudly at that step (by design).
-#
-# `workflow_dispatch` with a tag input allows manual runs — re-running a failed
-# bump or testing against an existing published release.
+# On release publish, regenerate the Homebrew formula from the release's
+# checksum assets (scripts/generate-homebrew-formula.sh) and open a PR against
+# the tap. workflow_dispatch allows manual runs for an existing release.
 on:
   release:
     types: [published]
@@ -83,10 +67,7 @@ jobs:
           scripts/generate-homebrew-formula.sh "$VERSION" sha256 > snipx.rb
           echo "Generated Formula/snipx.rb:"
           cat snipx.rb
-      - name: Open PR against curvelogic/homebrew-tap
-        # The ONLY step that sees HOMEBREW_TAP_TOKEN. The tap is public, so the
-        # clone is anonymous; the token is supplied on the push URL and to `gh`
-        # only, and is never written into git config (no credential persist).
+      - name: Open PR against the tap
         # Idempotent on re-run: the branch is force-pushed and PR creation is
         # skipped if an open PR for it already exists.
         env:
@@ -97,9 +78,7 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
-            echo "HOMEBREW_TAP_TOKEN secret is not set. Create a fine-grained PAT" >&2
-            echo "restricted to curvelogic/homebrew-tap (Contents: read+write," >&2
-            echo "Pull requests: read+write) and add it as a repository secret." >&2
+            echo "HOMEBREW_TAP_TOKEN secret is not configured." >&2
             exit 1
           fi
           tap=curvelogic/homebrew-tap
