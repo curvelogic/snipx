@@ -1,0 +1,68 @@
+{
+  "diagnostics": [
+    {
+      "code": "PARSE_ERROR",
+      "message": "Snippets may contain at most one capture",
+      "severity": "error",
+      "span": {
+        "end": 10,
+        "start": 7
+      }
+    },
+    {
+      "code": "INVALID_SNIPPET",
+      "message": "A snippet may contain at most one capture",
+      "severity": "error",
+      "span": {
+        "end": 11,
+        "start": 0
+      }
+    }
+  ],
+  "facts": [
+    {
+      "object": {
+        "kind": "name",
+        "value": "Region"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 20,
+          "start": 14
+        },
+        "predicate": {
+          "end": 13,
+          "start": 12
+        },
+        "statement": {
+          "end": 21,
+          "start": 0
+        },
+        "subject": {
+          "end": 11,
+          "start": 0
+        }
+      },
+      "subject": {
+        "kind": "unresolvedSnippet",
+        "source": "[A {b} {c}]"
+      }
+    }
+  ],
+  "input": {
+    "form": "commentaria"
+  },
+  "resolutions": [],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain"
+  },
+  "visibleText": {
+    "length": 6,
+    "normalisation": "NFC"
+  }
+}

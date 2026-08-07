@@ -1,0 +1,107 @@
+{
+  "diagnostics": [],
+  "facts": [
+    {
+      "object": {
+        "kind": "boolean",
+        "value": true
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "highlight"
+      },
+      "source": {
+        "object": {
+          "end": 24,
+          "start": 20
+        },
+        "predicate": {
+          "end": 19,
+          "start": 10
+        },
+        "statement": {
+          "end": 25,
+          "start": 0
+        },
+        "subject": {
+          "end": 9,
+          "start": 0
+        }
+      },
+      "subject": {
+        "kind": "textSpanSnippet",
+        "source": "[Alice]+",
+        "span": {
+          "end": 5,
+          "start": 0
+        }
+      }
+    },
+    {
+      "object": {
+        "kind": "boolean",
+        "value": true
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "highlight"
+      },
+      "source": {
+        "object": {
+          "end": 24,
+          "start": 20
+        },
+        "predicate": {
+          "end": 19,
+          "start": 10
+        },
+        "statement": {
+          "end": 25,
+          "start": 0
+        },
+        "subject": {
+          "end": 9,
+          "start": 0
+        }
+      },
+      "subject": {
+        "kind": "textSpanSnippet",
+        "source": "[Alice]+",
+        "span": {
+          "end": 15,
+          "start": 10
+        }
+      }
+    }
+  ],
+  "input": {
+    "form": "commentaria"
+  },
+  "resolutions": [
+    {
+      "source": "[Alice]+",
+      "sourceSpan": {
+        "end": 9,
+        "start": 0
+      },
+      "spans": [
+        {
+          "end": 5,
+          "start": 0
+        },
+        {
+          "end": 15,
+          "start": 10
+        }
+      ]
+    }
+  ],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain"
+  },
+  "visibleText": {
+    "length": 16,
+    "normalisation": "NFC"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "source": "[say \"x\" - now the file] a Phrase.\n",
+  "inputForm": "commentaria",
+  "targetText": "say **“x”** — now\n\nthe ﬁle\n",
+  "profile": "markdown-loose"
+}

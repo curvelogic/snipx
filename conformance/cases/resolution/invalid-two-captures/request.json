@@ -1,0 +1,6 @@
+{
+  "source": "[A {b} {c}] a Region.\n",
+  "inputForm": "commentaria",
+  "targetText": "A to B",
+  "profile": "plain"
+}

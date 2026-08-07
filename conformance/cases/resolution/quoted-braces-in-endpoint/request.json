@@ -1,0 +1,6 @@
+{
+  "source": "[\"{a}\"..end] a Region.\n",
+  "inputForm": "commentaria",
+  "targetText": "{a} middle end",
+  "profile": "plain"
+}

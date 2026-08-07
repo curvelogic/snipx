@@ -1,0 +1,63 @@
+{
+  "diagnostics": [],
+  "facts": [
+    {
+      "object": {
+        "kind": "name",
+        "value": "Character"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 30,
+          "start": 21
+        },
+        "predicate": {
+          "end": 20,
+          "start": 19
+        },
+        "statement": {
+          "end": 31,
+          "start": 0
+        },
+        "subject": {
+          "end": 18,
+          "start": 0
+        }
+      },
+      "subject": {
+        "kind": "snippet",
+        "source": "[said {Alice} now]"
+      }
+    }
+  ],
+  "input": {
+    "form": "commentaria"
+  },
+  "resolutions": [
+    {
+      "source": "[said {Alice} now]",
+      "sourceSpan": {
+        "end": 18,
+        "start": 0
+      },
+      "spans": [
+        {
+          "end": 12,
+          "start": 7
+        }
+      ]
+    }
+  ],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain-loose"
+  },
+  "visibleText": {
+    "length": 17,
+    "normalisation": "NFC"
+  }
+}

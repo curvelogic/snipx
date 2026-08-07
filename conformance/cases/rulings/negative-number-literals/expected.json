@@ -1,0 +1,77 @@
+{
+  "diagnostics": [],
+  "facts": [
+    {
+      "object": {
+        "kind": "number",
+        "value": -5.0
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "score"
+      },
+      "source": {
+        "object": {
+          "end": 14,
+          "start": 12
+        },
+        "predicate": {
+          "end": 11,
+          "start": 6
+        },
+        "statement": {
+          "end": 28,
+          "start": 0
+        },
+        "subject": {
+          "end": 5,
+          "start": 0
+        }
+      },
+      "subject": {
+        "kind": "name",
+        "value": "Alice"
+      }
+    },
+    {
+      "object": {
+        "kind": "number",
+        "value": -0.25
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "delta"
+      },
+      "source": {
+        "object": {
+          "end": 27,
+          "start": 22
+        },
+        "predicate": {
+          "end": 21,
+          "start": 16
+        },
+        "statement": {
+          "end": 28,
+          "start": 0
+        },
+        "subject": {
+          "end": 5,
+          "start": 0
+        }
+      },
+      "subject": {
+        "kind": "name",
+        "value": "Alice"
+      }
+    }
+  ],
+  "input": {
+    "form": "commentaria"
+  },
+  "resolutions": [],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain"
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "diagnostics": [
+    {
+      "code": "INVALID_SNIPPET",
+      "message": "Capture may not be empty",
+      "severity": "error",
+      "span": {
+        "end": 8,
+        "start": 0
+      }
+    }
+  ],
+  "facts": [
+    {
+      "object": {
+        "kind": "name",
+        "value": "Region"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 17,
+          "start": 11
+        },
+        "predicate": {
+          "end": 10,
+          "start": 9
+        },
+        "statement": {
+          "end": 18,
+          "start": 0
+        },
+        "subject": {
+          "end": 8,
+          "start": 0
+        }
+      },
+      "subject": {
+        "kind": "unresolvedSnippet",
+        "source": "[A {} B]"
+      }
+    }
+  ],
+  "input": {
+    "form": "commentaria"
+  },
+  "resolutions": [],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain"
+  },
+  "visibleText": {
+    "length": 6,
+    "normalisation": "NFC"
+  }
+}

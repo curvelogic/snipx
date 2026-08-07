@@ -1,0 +1,67 @@
+{
+  "diagnostics": [],
+  "facts": [
+    {
+      "object": {
+        "kind": "boolean",
+        "value": true
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "italic"
+      },
+      "source": {
+        "object": {
+          "end": 20,
+          "start": 16
+        },
+        "predicate": {
+          "end": 15,
+          "start": 9
+        },
+        "statement": {
+          "end": 21,
+          "start": 0
+        },
+        "subject": {
+          "end": 8,
+          "start": 0
+        }
+      },
+      "subject": {
+        "kind": "textSpanSnippet",
+        "source": "[Alice]",
+        "span": {
+          "end": 5,
+          "start": 0
+        }
+      }
+    }
+  ],
+  "input": {
+    "form": "commentaria"
+  },
+  "resolutions": [
+    {
+      "source": "[Alice]",
+      "sourceSpan": {
+        "end": 8,
+        "start": 0
+      },
+      "spans": [
+        {
+          "end": 5,
+          "start": 0
+        }
+      ]
+    }
+  ],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain"
+  },
+  "visibleText": {
+    "length": 13,
+    "normalisation": "NFC"
+  }
+}

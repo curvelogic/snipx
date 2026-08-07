@@ -1,0 +1,198 @@
+{
+  "diagnostics": [],
+  "facts": [
+    {
+      "object": {
+        "kind": "name",
+        "value": "Region"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 21,
+          "start": 15
+        },
+        "predicate": {
+          "end": 14,
+          "start": 13
+        },
+        "statement": {
+          "end": 22,
+          "start": 0
+        },
+        "subject": {
+          "end": 12,
+          "start": 0
+        }
+      },
+      "subject": {
+        "kind": "snippet",
+        "source": "[Start..End]"
+      }
+    },
+    {
+      "object": {
+        "kind": "name",
+        "value": "Region"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 39,
+          "start": 33
+        },
+        "predicate": {
+          "end": 32,
+          "start": 31
+        },
+        "statement": {
+          "end": 40,
+          "start": 23
+        },
+        "subject": {
+          "end": 30,
+          "start": 23
+        }
+      },
+      "subject": {
+        "kind": "snippet",
+        "source": "[..End]"
+      }
+    },
+    {
+      "object": {
+        "kind": "name",
+        "value": "Region"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 60,
+          "start": 54
+        },
+        "predicate": {
+          "end": 53,
+          "start": 52
+        },
+        "statement": {
+          "end": 61,
+          "start": 41
+        },
+        "subject": {
+          "end": 51,
+          "start": 41
+        }
+      },
+      "subject": {
+        "kind": "snippet",
+        "source": "[middle..]"
+      }
+    },
+    {
+      "object": {
+        "kind": "name",
+        "value": "Region"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 73,
+          "start": 67
+        },
+        "predicate": {
+          "end": 66,
+          "start": 65
+        },
+        "statement": {
+          "end": 74,
+          "start": 62
+        },
+        "subject": {
+          "end": 64,
+          "start": 62
+        }
+      },
+      "subject": {
+        "kind": "snippet",
+        "source": "[]"
+      }
+    }
+  ],
+  "input": {
+    "form": "commentaria"
+  },
+  "resolutions": [
+    {
+      "source": "[Start..End]",
+      "sourceSpan": {
+        "end": 12,
+        "start": 0
+      },
+      "spans": [
+        {
+          "end": 16,
+          "start": 0
+        }
+      ]
+    },
+    {
+      "source": "[..End]",
+      "sourceSpan": {
+        "end": 30,
+        "start": 23
+      },
+      "spans": [
+        {
+          "end": 16,
+          "start": 0
+        }
+      ]
+    },
+    {
+      "source": "[middle..]",
+      "sourceSpan": {
+        "end": 51,
+        "start": 41
+      },
+      "spans": [
+        {
+          "end": 21,
+          "start": 6
+        }
+      ]
+    },
+    {
+      "source": "[]",
+      "sourceSpan": {
+        "end": 64,
+        "start": 62
+      },
+      "spans": [
+        {
+          "end": 21,
+          "start": 0
+        }
+      ]
+    }
+  ],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain"
+  },
+  "visibleText": {
+    "length": 21,
+    "normalisation": "NFC"
+  }
+}

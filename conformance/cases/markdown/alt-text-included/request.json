@@ -1,0 +1,6 @@
+{
+  "source": "[before threshold after] a Phrase.\n",
+  "inputForm": "commentaria",
+  "targetText": "before ![threshold](door.png) after\n",
+  "profile": "markdown"
+}

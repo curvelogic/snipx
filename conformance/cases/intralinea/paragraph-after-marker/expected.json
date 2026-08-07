@@ -1,0 +1,65 @@
+{
+  "diagnostics": [],
+  "facts": [
+    {
+      "object": {
+        "kind": "name",
+        "value": "End"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "theme"
+      },
+      "source": {
+        "object": {
+          "end": 23,
+          "start": 19
+        },
+        "predicate": {
+          "end": 18,
+          "start": 13
+        },
+        "statement": {
+          "end": 25,
+          "start": 13
+        },
+        "subject": {
+          "end": 25,
+          "start": 23
+        }
+      },
+      "subject": {
+        "kind": "localSubject",
+        "marker": ">>",
+        "region": "after",
+        "scope": "paragraph"
+      }
+    }
+  ],
+  "input": {
+    "form": "intralinea"
+  },
+  "resolutions": [
+    {
+      "source": ">>",
+      "sourceSpan": {
+        "end": 25,
+        "start": 23
+      },
+      "spans": [
+        {
+          "end": 23,
+          "start": 12
+        }
+      ]
+    }
+  ],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain"
+  },
+  "visibleText": {
+    "length": 23,
+    "normalisation": "NFC"
+  }
+}

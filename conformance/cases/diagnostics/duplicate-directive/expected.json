@@ -1,0 +1,59 @@
+{
+  "diagnostics": [
+    {
+      "code": "DUPLICATE_DIRECTIVE",
+      "message": "Duplicate @profile directive is ignored",
+      "severity": "warning",
+      "span": {
+        "end": 35,
+        "start": 24
+      }
+    }
+  ],
+  "facts": [
+    {
+      "object": {
+        "kind": "name",
+        "value": "Character"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 54,
+          "start": 45
+        },
+        "predicate": {
+          "end": 44,
+          "start": 43
+        },
+        "statement": {
+          "end": 55,
+          "start": 37
+        },
+        "subject": {
+          "end": 42,
+          "start": 37
+        }
+      },
+      "subject": {
+        "kind": "name",
+        "value": "Alice"
+      }
+    }
+  ],
+  "input": {
+    "form": "commentaria"
+  },
+  "resolutions": [],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain"
+  },
+  "visibleText": {
+    "length": 13,
+    "normalisation": "NFC"
+  }
+}

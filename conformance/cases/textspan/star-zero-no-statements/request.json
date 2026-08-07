@@ -1,0 +1,6 @@
+{
+  "source": "~[Bob]* highlight true.\n",
+  "inputForm": "commentaria",
+  "targetText": "Alice waited.",
+  "profile": "plain"
+}

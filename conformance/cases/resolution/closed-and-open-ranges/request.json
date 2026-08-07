@@ -1,0 +1,6 @@
+{
+  "source": "[Start..End] a Region.\n[..End] a Region.\n[middle..] a Region.\n[] a Region.\n",
+  "inputForm": "commentaria",
+  "targetText": "Start middle End tail",
+  "profile": "plain"
+}

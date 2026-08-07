@@ -1,0 +1,6 @@
+{
+  "source": "[Alice opened the door] a Phrase.\n",
+  "inputForm": "commentaria",
+  "targetText": "Alice [opened](https://example.com/open) the [door][ref].\n\n[ref]: https://example.com/door\n",
+  "profile": "markdown"
+}

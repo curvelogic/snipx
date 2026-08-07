@@ -1,0 +1,112 @@
+{
+  "diagnostics": [],
+  "facts": [
+    {
+      "object": {
+        "kind": "name",
+        "value": "First"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 20,
+          "start": 15
+        },
+        "predicate": {
+          "end": 14,
+          "start": 13
+        },
+        "statement": {
+          "end": 20,
+          "start": 11
+        },
+        "subject": {
+          "end": 12,
+          "start": 11
+        }
+      },
+      "subject": {
+        "kind": "localSubject",
+        "marker": "<",
+        "region": "before",
+        "scope": "sentence"
+      }
+    },
+    {
+      "object": {
+        "kind": "name",
+        "value": "Second"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 44,
+          "start": 38
+        },
+        "predicate": {
+          "end": 37,
+          "start": 36
+        },
+        "statement": {
+          "end": 44,
+          "start": 34
+        },
+        "subject": {
+          "end": 35,
+          "start": 34
+        }
+      },
+      "subject": {
+        "kind": "localSubject",
+        "marker": "<",
+        "region": "before",
+        "scope": "sentence"
+      }
+    }
+  ],
+  "input": {
+    "form": "intralinea"
+  },
+  "resolutions": [
+    {
+      "source": "<",
+      "sourceSpan": {
+        "end": 12,
+        "start": 11
+      },
+      "spans": [
+        {
+          "end": 8,
+          "start": 0
+        }
+      ]
+    },
+    {
+      "source": "<",
+      "sourceSpan": {
+        "end": 35,
+        "start": 34
+      },
+      "spans": [
+        {
+          "end": 18,
+          "start": 10
+        }
+      ]
+    }
+  ],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain"
+  },
+  "visibleText": {
+    "length": 32,
+    "normalisation": "NFC"
+  }
+}

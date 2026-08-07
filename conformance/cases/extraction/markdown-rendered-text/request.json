@@ -1,0 +1,6 @@
+{
+  "source": "[Alice opened the door.] a Sentence.\n[code block] a Code.\n[threshold] a Alt.\n",
+  "inputForm": "commentaria",
+  "targetText": "# Heading\n\n> Alice [opened](door.html) the door.\n\n- first item\n- `second` item\n\n```text\ncode block\n```\n\n![threshold](door.png)\n\n[reference]: hidden.html\n",
+  "profile": "markdown"
+}

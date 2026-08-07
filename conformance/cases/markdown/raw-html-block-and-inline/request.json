@@ -1,0 +1,6 @@
+{
+  "source": "[Before Alice.] a Sentence.\n",
+  "inputForm": "commentaria",
+  "targetText": "Before <em>Alice</em>.\n\n<table><tr><td>Hidden</td></tr></table>\n",
+  "profile": "markdown"
+}

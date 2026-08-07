@@ -1,0 +1,153 @@
+{
+  "diagnostics": [],
+  "facts": [
+    {
+      "object": {
+        "kind": "name",
+        "value": "Sentence"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 35,
+          "start": 27
+        },
+        "predicate": {
+          "end": 26,
+          "start": 25
+        },
+        "statement": {
+          "end": 36,
+          "start": 0
+        },
+        "subject": {
+          "end": 24,
+          "start": 0
+        }
+      },
+      "subject": {
+        "kind": "snippet",
+        "source": "[Alice opened the door.]"
+      }
+    },
+    {
+      "object": {
+        "kind": "name",
+        "value": "Code"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 56,
+          "start": 52
+        },
+        "predicate": {
+          "end": 51,
+          "start": 50
+        },
+        "statement": {
+          "end": 57,
+          "start": 37
+        },
+        "subject": {
+          "end": 49,
+          "start": 37
+        }
+      },
+      "subject": {
+        "kind": "snippet",
+        "source": "[code block]"
+      }
+    },
+    {
+      "object": {
+        "kind": "name",
+        "value": "Alt"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 75,
+          "start": 72
+        },
+        "predicate": {
+          "end": 71,
+          "start": 70
+        },
+        "statement": {
+          "end": 76,
+          "start": 58
+        },
+        "subject": {
+          "end": 69,
+          "start": 58
+        }
+      },
+      "subject": {
+        "kind": "snippet",
+        "source": "[threshold]"
+      }
+    }
+  ],
+  "input": {
+    "form": "commentaria"
+  },
+  "resolutions": [
+    {
+      "source": "[Alice opened the door.]",
+      "sourceSpan": {
+        "end": 24,
+        "start": 0
+      },
+      "spans": [
+        {
+          "end": 30,
+          "start": 8
+        }
+      ]
+    },
+    {
+      "source": "[code block]",
+      "sourceSpan": {
+        "end": 49,
+        "start": 37
+      },
+      "spans": [
+        {
+          "end": 64,
+          "start": 54
+        }
+      ]
+    },
+    {
+      "source": "[threshold]",
+      "sourceSpan": {
+        "end": 69,
+        "start": 58
+      },
+      "spans": [
+        {
+          "end": 74,
+          "start": 65
+        }
+      ]
+    }
+  ],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "markdown"
+  },
+  "visibleText": {
+    "length": 75,
+    "normalisation": "NFC"
+  }
+}

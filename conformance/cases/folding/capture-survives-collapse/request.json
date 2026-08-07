@@ -1,0 +1,6 @@
+{
+  "source": "[said {Alice} now] a Character.\n",
+  "inputForm": "commentaria",
+  "targetText": "said \t Alice  now",
+  "profile": "plain-loose"
+}

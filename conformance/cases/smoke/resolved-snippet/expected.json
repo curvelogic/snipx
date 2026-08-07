@@ -1,0 +1,64 @@
+{
+  "diagnostics": [],
+  "facts": [
+    {
+      "object": {
+        "kind": "name",
+        "value": "Bob"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "friend"
+      },
+      "source": {
+        "object": {
+          "end": 18,
+          "start": 15
+        },
+        "predicate": {
+          "end": 14,
+          "start": 8
+        },
+        "statement": {
+          "end": 19,
+          "start": 0
+        },
+        "subject": {
+          "end": 7,
+          "start": 0
+        }
+      },
+      "subject": {
+        "kind": "snippet",
+        "source": "[Alice]"
+      }
+    }
+  ],
+  "input": {
+    "form": "commentaria"
+  },
+  "resolutions": [
+    {
+      "source": "[Alice]",
+      "sourceSpan": {
+        "end": 7,
+        "start": 0
+      },
+      "spans": [
+        {
+          "end": 5,
+          "start": 0
+        }
+      ]
+    }
+  ],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain",
+    "uri": "chapter.txt"
+  },
+  "visibleText": {
+    "length": 13,
+    "normalisation": "NFC"
+  }
+}

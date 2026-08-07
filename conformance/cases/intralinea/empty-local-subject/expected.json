@@ -1,0 +1,59 @@
+{
+  "diagnostics": [
+    {
+      "code": "EMPTY_LOCAL_SUBJECT",
+      "message": "Local subject < selects no text",
+      "severity": "error",
+      "span": {
+        "end": 3,
+        "start": 2
+      }
+    }
+  ],
+  "facts": [
+    {
+      "object": {
+        "kind": "name",
+        "value": "Promise"
+      },
+      "predicate": {
+        "kind": "predicate",
+        "value": "a"
+      },
+      "source": {
+        "object": {
+          "end": 13,
+          "start": 6
+        },
+        "predicate": {
+          "end": 5,
+          "start": 4
+        },
+        "statement": {
+          "end": 13,
+          "start": 2
+        },
+        "subject": {
+          "end": 3,
+          "start": 2
+        }
+      },
+      "subject": {
+        "kind": "unresolvedLocalSubject",
+        "marker": "<"
+      }
+    }
+  ],
+  "input": {
+    "form": "intralinea"
+  },
+  "resolutions": [],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain"
+  },
+  "visibleText": {
+    "length": 14,
+    "normalisation": "NFC"
+  }
+}

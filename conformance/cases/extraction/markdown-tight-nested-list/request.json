@@ -1,0 +1,6 @@
+{
+  "source": "[three] a Item.\n",
+  "inputForm": "commentaria",
+  "targetText": "- one\n  - two\n- three\n",
+  "profile": "markdown"
+}

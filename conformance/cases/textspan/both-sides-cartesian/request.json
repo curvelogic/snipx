@@ -1,0 +1,6 @@
+{
+  "source": "~[A]+ before ~[B]+.\n",
+  "inputForm": "commentaria",
+  "targetText": "A A B B",
+  "profile": "plain"
+}

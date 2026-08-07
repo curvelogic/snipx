@@ -1,0 +1,22 @@
+{
+  "diagnostics": [
+    {
+      "code": "MISSING_AMBIENT_SUBJECT",
+      "message": "Subjectless statement requires an ambient subject",
+      "severity": "error",
+      "span": {
+        "end": 15,
+        "start": 4
+      }
+    }
+  ],
+  "facts": [],
+  "input": {
+    "form": "marginalia"
+  },
+  "resolutions": [],
+  "snipxVersion": "0.1",
+  "target": {
+    "profile": "plain"
+  }
+}

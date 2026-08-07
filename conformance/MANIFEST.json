@@ -1,0 +1,22 @@
+{
+  "corpusVersion": "0.1.0",
+  "specVersion": "0.1",
+  "caseCount": 80,
+  "comparison": {
+    "mode": "structural",
+    "objectFieldOrder": "insensitive",
+    "excludedFields": [
+      "implementation"
+    ],
+    "informativeFields": [
+      "diagnostics[].message",
+      "diagnostics[].related[].message"
+    ],
+    "arrayOrder": {
+      "facts": "sensitive",
+      "resolutions": "sensitive",
+      "diagnostics": "insensitive"
+    },
+    "diagnosticCodes": "normative"
+  }
+}
