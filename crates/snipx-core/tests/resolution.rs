@@ -512,3 +512,133 @@ fn star_allows_zero_matches_and_question_rejects_multiple() {
         .iter()
         .any(|diagnostic| diagnostic.code == DiagnosticCode::SnippetAmbiguous));
 }
+
+#[test]
+fn quantified_text_span_snippet_distributes_one_statement_per_span() {
+    let visible = extract_visible_text("Alice met Alice.", Profile::Plain).unwrap();
+    let resolved = resolve(
+        &expand_commentaria("~[Alice]+ highlight true.\n"),
+        &visible,
+        ResolveOptions::default(),
+    );
+
+    assert!(resolved.diagnostics.is_empty());
+    assert_eq!(resolved.statements.len(), 2);
+    let spans: Vec<TextSpan> = resolved
+        .statements
+        .iter()
+        .map(|statement| {
+            let Value::ResolvedTextSpan { snippet, span } = &statement.subject else {
+                panic!("expected resolved text-span subject");
+            };
+            assert_eq!(snippet.source, "[Alice]+");
+            *span
+        })
+        .collect();
+    assert_eq!(
+        spans,
+        vec![
+            TextSpan { start: 0, end: 5 },
+            TextSpan { start: 10, end: 15 }
+        ]
+    );
+    // The resolutions array is unchanged: one entry listing all spans.
+    assert_eq!(resolved.resolutions.len(), 1);
+    assert_eq!(resolved.resolutions[0].spans.len(), 2);
+}
+
+#[test]
+fn both_sides_text_span_distribution_is_cartesian() {
+    let visible = extract_visible_text("A A B B", Profile::Plain).unwrap();
+    let resolved = resolve(
+        &expand_commentaria("~[A]+ before ~[B]+.\n"),
+        &visible,
+        ResolveOptions::default(),
+    );
+
+    assert!(resolved.diagnostics.is_empty());
+    let pairs: Vec<(TextSpan, TextSpan)> = resolved
+        .statements
+        .iter()
+        .map(|statement| {
+            let Value::ResolvedTextSpan { span: subject, .. } = &statement.subject else {
+                panic!("expected resolved text-span subject");
+            };
+            let Value::ResolvedTextSpan { span: object, .. } = &statement.object else {
+                panic!("expected resolved text-span object");
+            };
+            (*subject, *object)
+        })
+        .collect();
+    let span = |start, end| TextSpan { start, end };
+    assert_eq!(
+        pairs,
+        vec![
+            (span(0, 1), span(4, 5)),
+            (span(0, 1), span(6, 7)),
+            (span(2, 3), span(4, 5)),
+            (span(2, 3), span(6, 7)),
+        ]
+    );
+}
+
+#[test]
+fn zero_match_star_text_span_produces_no_statements() {
+    let visible = extract_visible_text("Alice waited.", Profile::Plain).unwrap();
+    let resolved = resolve(
+        &expand_commentaria("~[Bob]* highlight true.\n"),
+        &visible,
+        ResolveOptions::default(),
+    );
+
+    assert!(resolved.diagnostics.is_empty());
+    assert!(resolved.statements.is_empty());
+    assert_eq!(resolved.resolutions[0].spans, Vec::<TextSpan>::new());
+}
+
+#[test]
+fn unquantified_text_span_snippet_carries_its_span() {
+    let visible = extract_visible_text("Alice waited.", Profile::Plain).unwrap();
+    let resolved = resolve(
+        &expand_commentaria("~[Alice] italic true.\n"),
+        &visible,
+        ResolveOptions::default(),
+    );
+
+    assert_eq!(resolved.statements.len(), 1);
+    let Value::ResolvedTextSpan { span, .. } = &resolved.statements[0].subject else {
+        panic!("expected resolved text-span subject");
+    };
+    assert_eq!(*span, TextSpan { start: 0, end: 5 });
+}
+
+#[test]
+fn quantified_denotational_snippet_still_collapses_to_one_statement() {
+    let visible = extract_visible_text("Alice met Alice.", Profile::Plain).unwrap();
+    let resolved = resolve(
+        &expand_commentaria("[Alice]+ a Character.\n"),
+        &visible,
+        ResolveOptions::default(),
+    );
+
+    assert_eq!(resolved.statements.len(), 1);
+    assert!(matches!(resolved.statements[0].subject, Value::Snippet(_)));
+}
+
+#[test]
+fn decorations_on_text_span_subjects_distribute() {
+    let visible = extract_visible_text("Alice met Alice.", Profile::Plain).unwrap();
+    let resolved = resolve(
+        &expand_commentaria("~[Alice]+ ::\"note\".\n"),
+        &visible,
+        ResolveOptions::default(),
+    );
+
+    assert!(resolved.diagnostics.is_empty());
+    // The decoration expands to one note statement, distributed over both spans.
+    assert_eq!(resolved.statements.len(), 2);
+    for statement in &resolved.statements {
+        assert!(matches!(statement.subject, Value::ResolvedTextSpan { .. }));
+        assert_eq!(statement.predicate, Value::Predicate("note".into()));
+    }
+}

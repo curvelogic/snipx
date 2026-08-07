@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Text-span snippets (`~[...]`) now distribute one fact per matched
+  span, as the spec's "Denotation And Text Spans" section requires
+  (Cartesian product when both subject and object are text-span
+  snippets). Each distributed `textSpanSnippet` fact value carries its
+  concrete `span` in visible-text scalar offsets; quantified
+  denotational snippets still collapse to a single fact.
+
 ## [0.1.1] - 2026-08-02
 
 ### Changed
