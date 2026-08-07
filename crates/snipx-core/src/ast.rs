@@ -52,7 +52,7 @@ macro_rules! ast_node {
 ast_node!(Root, SyntaxKind::Root);
 ast_node!(
     SnipxRegion,
-    SyntaxKind::Root | SyntaxKind::LineComment | SyntaxKind::Fence | SyntaxKind::IntralineaBlock
+    SyntaxKind::Root | SyntaxKind::SlashEmbedLine | SyntaxKind::Fence | SyntaxKind::IntralineaBlock
 );
 ast_node!(Statement, SyntaxKind::Statement);
 ast_node!(Subject, SyntaxKind::Subject);

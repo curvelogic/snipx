@@ -49,7 +49,7 @@ fn format_marginalia(root: &SyntaxNode) -> String {
     for element in root.children_with_tokens() {
         match element {
             NodeOrToken::Node(node)
-                if matches!(node.kind(), SyntaxKind::LineComment | SyntaxKind::Fence) =>
+                if matches!(node.kind(), SyntaxKind::SlashEmbedLine | SyntaxKind::Fence) =>
             {
                 output.push_str(&format_embedded_snipx_container(&node));
             }
