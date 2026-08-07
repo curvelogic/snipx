@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Conformance corpus (`conformance/`): 80 cases defining conformance at
+  the canonical-JSON export boundary, with the comparison contract in
+  `MANIFEST.json` (structural comparison, diagnostic codes normative,
+  message strings informative, `implementation` block excluded; ADR 0001).
+  The Rust runner executes the corpus as part of the workspace test suite;
+  `SNIPX_CONFORMANCE_REGEN=1` regenerates expectations for review.
+- TypeScript implementation `@curvelogic/snipx` (`packages/snipx-ts`)
+  scoped to canonical-JSON parity — parsing, expansion, visible-text
+  extraction for all four profiles, resolution, and export — with explicit
+  UTF-16/scalar/UTF-8 index maps and full conformance-corpus parity
+  (ADR 0002). CI runs both implementations against the corpus.
+
 - `snipx lint`: fragility diagnostics for resolved snippets, warning
   when anchors are likely to break or re-bind under target edits —
   `FRAGILE_SHORT_ANCHOR`, `FRAGILE_NEAR_DUPLICATE`, and

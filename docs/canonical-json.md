@@ -1,6 +1,12 @@
 # Canonical JSON
 
-JSON is the canonical machine output of the reference implementation.
+JSON is the canonical machine output of snipx implementations, and the
+surface at which conformance is defined: the conformance corpus
+(`../conformance/`) pins expected export documents for both the Rust and
+TypeScript implementations, compared under the contract in
+`conformance/MANIFEST.json` (see
+[ADR 0001](adr/0001-conformance-corpus.md)). Diagnostic codes are
+normative; message strings and the `implementation` block are not.
 `snipx check`, `snipx lint`, `snipx resolve`, and `snipx export` emit
 one JSON document on stdout; `--pretty` changes formatting only, never
 the schema. The commands report nested slices of the same document:
