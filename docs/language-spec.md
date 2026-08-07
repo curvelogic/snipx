@@ -12,6 +12,13 @@ style runs, or editor metadata.
 This document is a draft v0 specification. It deliberately favours a
 small, hand-authorable core over implementation completeness.
 
+The specification carries a two-part version, currently **0.1**. Any
+normative change bumps the minor version; editorial changes do not.
+Version 1.0 will mark the end of the draft. Conforming implementations
+report the specification version they target as `snipxVersion` in
+canonical JSON output. Changes are recorded in the
+[Specification Changelog](#specification-changelog).
+
 ## Reference Implementation Status
 
 The Rust reference implementation in this repository covers the three v0
@@ -715,3 +722,22 @@ Opportunities for later versions:
 - optional export to RDF-like triples/quads;
 - explicit support for claims, sources, narrator/character attribution,
   uncertainty, contradiction, and inference in literary analysis.
+
+## Specification Changelog
+
+### 0.1 — 2026-08-06
+
+First versioned revision. Consolidates the draft v0 language as
+amended by the applied rulings:
+
+- range endpoints may not overlap; exact adjacency is allowed;
+- an open range whose written endpoint matches more than once is
+  ambiguous under the default cardinality;
+- quotes delimit snippet text only when they wrap an entire snippet
+  body or an entire range endpoint; elsewhere they are literal;
+- number literals accept a leading minus sign;
+- quantified text-span snippets distribute one fact per matching
+  span, while quantified denotational snippets collapse.
+
+Introduces this changelog and the version identity mirrored by
+`snipxVersion` in canonical JSON output.

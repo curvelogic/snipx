@@ -11,6 +11,11 @@ use crate::syntax::SyntaxKind;
 use crate::visible_text::{extract_visible_text, Profile};
 use crate::{parse, TextSpan};
 
+/// The specification version this implementation targets, mirrored as
+/// `snipxVersion` in canonical JSON output. Kept in step with the
+/// version declared in docs/language-spec.md.
+pub const SPEC_VERSION: &str = "0.1";
+
 #[derive(Debug, Clone)]
 pub struct ExportRequest {
     pub source: String,
@@ -307,7 +312,7 @@ pub fn export_json(request: ExportRequest) -> ExportDocument {
     });
 
     ExportDocument {
-        snipx_version: "0.0".to_owned(),
+        snipx_version: SPEC_VERSION.to_owned(),
         implementation: JsonImplementation {
             name: "snipx".to_owned(),
             version: env!("CARGO_PKG_VERSION").to_owned(),

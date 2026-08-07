@@ -17,7 +17,7 @@ fn unresolved_snippets_remain_in_partial_facts() {
     assert_eq!(
         value,
         json!({
-            "snipxVersion": "0.0",
+            "snipxVersion": "0.1",
             "implementation": {
                 "name": "snipx",
                 "version": "0.1.1"
@@ -370,7 +370,7 @@ fn quantified_text_span_facts_distribute_per_span() {
     assert_eq!(
         value,
         json!({
-            "snipxVersion": "0.0",
+            "snipxVersion": "0.1",
             "implementation": {
                 "name": "snipx",
                 "version": "0.1.1"

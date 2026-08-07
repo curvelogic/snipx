@@ -13,7 +13,7 @@ contract for downstream tools.
 
 ```json
 {
-  "snipxVersion": "0.0",
+  "snipxVersion": "0.1",
   "implementation": { "name": "snipx", "version": "0.1.0" },
   "input": { "form": "commentaria", "path": "notes.snipx" },
   "target": { "uri": "chapter.txt", "profile": "plain" },
@@ -49,6 +49,10 @@ contract for downstream tools.
 }
 ```
 
+- `snipxVersion` is the language-specification version this output
+  conforms to, mirroring the version declared in
+  [the specification](language-spec.md). It is independent of the
+  implementation crate version reported under `implementation`.
 - `facts` are expanded subject–predicate–object triples. Statements
   containing unresolved snippets still produce facts, carrying
   `unresolvedSnippet` values, rather than disappearing silently.

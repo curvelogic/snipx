@@ -22,7 +22,7 @@ pub use input::{InputForm, ParseOptions};
 pub use json::{
     export_json, ExportDocument, ExportRequest, JsonDiagnostic, JsonFact, JsonFactSource,
     JsonImplementation, JsonInput, JsonRelatedSpan, JsonResolution, JsonSpan, JsonTarget,
-    JsonValue, JsonVisibleText,
+    JsonValue, JsonVisibleText, SPEC_VERSION,
 };
 pub use parser::{parse, Parse};
 pub use r#match::{match_snippet, TextSpan};
