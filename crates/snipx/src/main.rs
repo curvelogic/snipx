@@ -19,6 +19,7 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Command {
     Check(DocumentArgs),
+    Lint(DocumentArgs),
     Resolve(DocumentArgs),
     Export(DocumentArgs),
     Fmt(FmtArgs),
@@ -124,6 +125,7 @@ fn run() -> Result<u8, CliError> {
 
     match cli.command {
         Command::Check(args) => run_document(args, OutputView::Check),
+        Command::Lint(args) => run_document(args, OutputView::Lint),
         Command::Resolve(args) => run_document(args, OutputView::Resolve),
         Command::Export(args) => run_document(args, OutputView::Export),
         Command::Fmt(args) => run_fmt(args),
@@ -131,11 +133,13 @@ fn run() -> Result<u8, CliError> {
 }
 
 /// Which slice of the canonical JSON document a command reports.
-/// `check` validates, `resolve` adds resolution results, `export`
-/// emits the full document including facts.
+/// `check` validates, `lint` validates plus fragility warnings,
+/// `resolve` adds resolution results, `export` emits the full
+/// document including facts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum OutputView {
     Check,
+    Lint,
     Resolve,
     Export,
 }
@@ -184,6 +188,7 @@ fn run_document(args: DocumentArgs, view: OutputView) -> Result<u8, CliError> {
             .map(|path| path.to_string_lossy().into_owned()),
         target_uri,
         ambient_subject,
+        lint: view == OutputView::Lint,
     });
 
     let mut value = serde_json::to_value(&document).map_err(|source| CliError {
@@ -192,7 +197,7 @@ fn run_document(args: DocumentArgs, view: OutputView) -> Result<u8, CliError> {
     })?;
     if let Some(object) = value.as_object_mut() {
         match view {
-            OutputView::Check => {
+            OutputView::Check | OutputView::Lint => {
                 object.remove("facts");
                 object.remove("resolutions");
                 object.remove("visibleText");

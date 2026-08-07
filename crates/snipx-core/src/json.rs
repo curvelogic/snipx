@@ -27,6 +27,9 @@ pub struct ExportRequest {
     pub path: Option<String>,
     pub target_uri: Option<String>,
     pub ambient_subject: Option<Value>,
+    /// Run the fragility lint over resolved snippets, appending
+    /// warning diagnostics. Never changes facts or resolutions.
+    pub lint: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -267,6 +270,11 @@ pub fn export_json(request: ExportRequest) -> ExportDocument {
                         intralinea_anchors,
                     },
                 );
+                let fragility_diagnostics = if request.lint {
+                    crate::fragility::analyse_fragility(&resolved, &visible, profile)
+                } else {
+                    Vec::new()
+                };
                 visible_text = Some(JsonVisibleText {
                     normalisation: visible.normalisation.to_owned(),
                     length: visible.text.chars().count(),
@@ -278,6 +286,7 @@ pub fn export_json(request: ExportRequest) -> ExportDocument {
                         .diagnostics
                         .into_iter()
                         .chain(extraction_diagnostics)
+                        .chain(fragility_diagnostics)
                         .collect(),
                 )
             }
@@ -524,5 +533,8 @@ fn diagnostic_code(code: DiagnosticCode) -> &'static str {
         DiagnosticCode::InvalidNumber => "INVALID_NUMBER",
         DiagnosticCode::SnippetNotFound => "SNIPPET_NOT_FOUND",
         DiagnosticCode::SnippetAmbiguous => "SNIPPET_AMBIGUOUS",
+        DiagnosticCode::FragileShortAnchor => "FRAGILE_SHORT_ANCHOR",
+        DiagnosticCode::FragileNearDuplicate => "FRAGILE_NEAR_DUPLICATE",
+        DiagnosticCode::FragileCaptureContext => "FRAGILE_CAPTURE_CONTEXT",
     }
 }

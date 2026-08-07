@@ -2,6 +2,7 @@ pub mod ast;
 pub mod diagnostic;
 pub mod expand;
 pub mod format;
+pub mod fragility;
 pub mod input;
 pub mod json;
 pub mod r#match;
@@ -18,6 +19,7 @@ pub use expand::{
     Value,
 };
 pub use format::{format, FormatOptions, FormatResult};
+pub use fragility::{analyse_fragility, SHORT_ANCHOR_THRESHOLD};
 pub use input::{InputForm, ParseOptions};
 pub use json::{
     export_json, ExportDocument, ExportRequest, JsonDiagnostic, JsonFact, JsonFactSource,

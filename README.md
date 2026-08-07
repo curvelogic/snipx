@@ -79,6 +79,22 @@ Use `--ambient EXPR` to provide an ambient subject for subjectless statements.
 The value must be one complete SnipX subject expression; use `[]` for the whole
 document.
 
+### Lint for fragile snippets
+
+```bash
+snipx lint --target chapter.md notes.snipx
+```
+
+`lint` behaves exactly like `check` but additionally warns about resolved
+snippets that are likely to break or re-bind when the target is edited:
+`FRAGILE_SHORT_ANCHOR` (anchor shorter than 5 Unicode scalars),
+`FRAGILE_NEAR_DUPLICATE` (near-duplicate matches appear under loose
+normalisation), and `FRAGILE_CAPTURE_CONTEXT` (capture context also occurs
+elsewhere). Fragility diagnostics are always warnings, never change resolution
+results, and affect the exit code only with `--strict`. The codes are
+provisional pending ratification of
+[ADR 0004](docs/adr/0004-fragility-diagnostics.md).
+
 ### Format
 
 Format standard input to standard output:
@@ -106,8 +122,8 @@ the standard-input marker `-` before attempting to read standard input.
 | 3 | Input/output failure |
 | 4 | Unsupported feature or profile (reserved) |
 
-The `check`, `resolve`, and `export` commands still emit partial canonical JSON
-when parsing or resolution produces diagnostics.
+The `check`, `lint`, `resolve`, and `export` commands still emit partial
+canonical JSON when parsing or resolution produces diagnostics.
 
 ## Library
 

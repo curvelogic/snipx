@@ -148,6 +148,7 @@ fn parse_request(case_dir: &Path) -> ExportRequest {
         input_form,
         target_text,
         profile,
+        lint: false,
         path: string_field(object, "path", &path),
         target_uri: string_field(object, "targetUri", &path),
         ambient_subject: object

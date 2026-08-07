@@ -3,6 +3,7 @@ use snipx_core::{export_json, ExportRequest, InputForm};
 
 fn export(source: &str) -> serde_json::Value {
     let document = export_json(ExportRequest {
+        lint: false,
         source: source.to_owned(),
         input_form: InputForm::Intralinea,
         target_text: None,
@@ -121,6 +122,7 @@ fn local_subject_with_no_text_is_diagnosed() {
 #[test]
 fn local_subject_takes_precedence_over_ambient_subject() {
     let document = export_json(ExportRequest {
+        lint: false,
         source: "Alice waited. {{< a Promise}}".to_owned(),
         input_form: InputForm::Intralinea,
         target_text: None,

@@ -29,6 +29,7 @@ fn help_lists_the_available_subcommands() {
         .stdout(predicate::str::contains("check"))
         .stdout(predicate::str::contains("resolve"))
         .stdout(predicate::str::contains("export"))
+        .stdout(predicate::str::contains("lint"))
         .stdout(predicate::str::contains("fmt"));
 }
 
@@ -141,6 +142,55 @@ fn check_still_exits_one_on_resolution_errors() {
         .assert()
         .code(1)
         .stdout(predicate::str::contains("SNIPPET_NOT_FOUND"));
+}
+
+#[test]
+fn lint_reports_fragility_warnings_without_failing() {
+    let target = temp_file("lint-target", "Bob waited.");
+    let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
+
+    command
+        .arg("lint")
+        .arg("--target")
+        .arg(&target)
+        .write_stdin("[Bob] a Character.\n")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("FRAGILE_SHORT_ANCHOR"))
+        .stdout(predicate::str::contains("\"severity\":\"warning\""))
+        .stdout(predicate::str::contains("\"facts\"").not())
+        .stdout(predicate::str::contains("\"resolutions\"").not());
+}
+
+#[test]
+fn lint_strict_promotes_fragility_warnings_to_exit_one() {
+    let target = temp_file("lint-strict-target", "Bob waited.");
+    let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
+
+    command
+        .arg("lint")
+        .arg("--strict")
+        .arg("--target")
+        .arg(&target)
+        .write_stdin("[Bob] a Character.\n")
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains("FRAGILE_SHORT_ANCHOR"));
+}
+
+#[test]
+fn check_does_not_report_fragility_warnings() {
+    let target = temp_file("check-no-lint-target", "Bob waited.");
+    let mut command = Command::cargo_bin("snipx").expect("snipx binary should build");
+
+    command
+        .arg("check")
+        .arg("--target")
+        .arg(&target)
+        .write_stdin("[Bob] a Character.\n")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("FRAGILE_").not());
 }
 
 #[test]
