@@ -126,3 +126,40 @@ bd prime                # Refresh Beads context
 
 **Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md for details and anti-patterns.
 <!-- END BEADS CODEX SETUP -->
+
+## Build & Test
+
+```bash
+# Rust (workspace: snipx-core library, snipx CLI)
+cargo build --workspace
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-features   # includes the conformance corpus
+
+# TypeScript (packages/snipx-ts)
+pnpm install
+pnpm -C packages/snipx-ts exec tsc --noEmit
+pnpm -C packages/snipx-ts test          # unit tests + conformance corpus
+```
+
+Regenerate conformance expectations (review diffs before adoption):
+
+```bash
+SNIPX_CONFORMANCE_REGEN=1 cargo test -p snipx-core --test conformance
+```
+
+## Architecture Overview
+
+Two implementations of the SnipX annotation language, held to identical
+canonical-JSON behaviour by the conformance corpus in `conformance/`
+(contract in `MANIFEST.json`; design in `docs/adr/0001`):
+
+- `crates/snipx-core` — Rust reference: lossless parser, formatter,
+  expansion, visible-text extraction, snippet resolution, JSON export.
+  `crates/snipx` is the CLI.
+- `packages/snipx-ts` — TypeScript (`@curvelogic/snipx`), canonical-JSON
+  parity only (no formatter/CST/CLI); explicit UTF-16/scalar/UTF-8 index
+  maps (`docs/adr/0002`).
+
+The language spec is `docs/language-spec.md`; the export format is
+`docs/canonical-json.md`. ADRs marked Proposed await ratification.

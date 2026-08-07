@@ -19,12 +19,17 @@ report the specification version they target as `snipxVersion` in
 canonical JSON output. Changes are recorded in the
 [Specification Changelog](#specification-changelog).
 
-## Reference Implementation Status
+## Implementation Status
 
-The Rust reference implementation in this repository covers the three v0
-variants, lossless parsing, conservative formatting, expansion, canonical JSON,
-and snippet resolution over plain text and Markdown. It currently implements
-the `plain`, `plain-loose`, `markdown`, and `markdown-loose` profiles.
+This repository contains two implementations. The Rust reference
+implementation covers the three v0 variants, lossless parsing, conservative
+formatting, expansion, canonical JSON, and snippet resolution over plain
+text and Markdown. The TypeScript implementation (`packages/snipx-ts`)
+covers canonical-JSON parity: parsing, expansion, visible-text extraction,
+resolution, and export. Both implement the `plain`, `plain-loose`,
+`markdown`, and `markdown-loose` profiles, and both are held to the same
+behaviour by the conformance corpus (`conformance/`), which defines
+conformance at the canonical-JSON export boundary.
 
 Other host and rich-document profiles described by this specification define
 the language's intended extension model; they are not yet implemented. The

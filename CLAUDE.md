@@ -60,17 +60,40 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
 ## Build & Test
 
-_Add your build and test commands here_
+```bash
+# Rust (workspace: snipx-core library, snipx CLI)
+cargo build --workspace
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-features   # includes the conformance corpus
+
+# TypeScript (packages/snipx-ts)
+pnpm install
+pnpm -C packages/snipx-ts exec tsc --noEmit
+pnpm -C packages/snipx-ts test          # unit tests + conformance corpus
+```
+
+Regenerate conformance expectations (review diffs before adoption):
 
 ```bash
-# Example:
-# npm install
-# npm test
+SNIPX_CONFORMANCE_REGEN=1 cargo test -p snipx-core --test conformance
 ```
 
 ## Architecture Overview
 
-_Add a brief overview of your project architecture_
+Two implementations of the SnipX annotation language, held to identical
+canonical-JSON behaviour by the conformance corpus in `conformance/`
+(contract in `MANIFEST.json`; design in `docs/adr/0001`):
+
+- `crates/snipx-core` — Rust reference: lossless parser, formatter,
+  expansion, visible-text extraction, snippet resolution, JSON export.
+  `crates/snipx` is the CLI.
+- `packages/snipx-ts` — TypeScript (`@curvelogic/snipx`), canonical-JSON
+  parity only (no formatter/CST/CLI); explicit UTF-16/scalar/UTF-8 index
+  maps (`docs/adr/0002`).
+
+The language spec is `docs/language-spec.md`; the export format is
+`docs/canonical-json.md`. ADRs marked Proposed await ratification.
 
 ## Conventions & Patterns
 

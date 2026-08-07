@@ -42,11 +42,17 @@ Declared machine-readably in `MANIFEST.json`:
 
 ## Running and regenerating
 
-The Rust reference runner is `crates/snipx-core/tests/conformance.rs` and
-runs with the ordinary workspace test suite:
+Both implementations run the corpus in their ordinary test suites. The
+Rust reference runner is `crates/snipx-core/tests/conformance.rs`:
 
 ```
 cargo test -p snipx-core --test conformance
+```
+
+The TypeScript runner is `packages/snipx-ts/tests/conformance.test.ts`:
+
+```
+pnpm -C packages/snipx-ts test
 ```
 
 To regenerate all `expected.json` files from the current Rust reference

@@ -7,8 +7,10 @@ Its central primitive is the **snippet**: a human-written reference to a range
 of visible text in a target document. SnipX resolves snippets over a canonical
 visible-text stream rather than source markup, style runs, or editor metadata.
 
-This repository contains the draft v0 language specification and a working
-Rust reference implementation.
+This repository contains the draft v0 language specification, the Rust
+reference implementation, a TypeScript implementation, and a conformance
+corpus that holds every implementation to the same canonical-JSON
+behaviour.
 
 ## Implemented Features
 
@@ -132,12 +134,41 @@ public API includes parsing, typed AST access, formatting, expansion,
 visible-text extraction, snippet matching and resolution, and canonical JSON
 export. The `snipx` crate provides the CLI.
 
+## TypeScript Implementation
+
+`packages/snipx-ts` contains `@curvelogic/snipx`, a TypeScript
+implementation scoped to canonical-JSON parity: parsing, expansion,
+visible-text extraction (all four profiles), snippet resolution, and JSON
+export. The formatter, lossless CST access, and CLI remain Rust-only. It
+proves parity by running the same conformance corpus as the Rust
+implementation.
+
+```bash
+pnpm install
+pnpm -C packages/snipx-ts exec tsc --noEmit
+pnpm -C packages/snipx-ts test
+```
+
+## Conformance
+
+The [conformance corpus](conformance/README.md) defines conformance for
+snipx implementations at the JSON export boundary: each case pairs an
+export request with the expected export document, compared structurally
+under the contract in `conformance/MANIFEST.json` (diagnostic codes
+normative, message strings informative, the `implementation` block
+excluded). Both implementations run the full corpus in their ordinary test
+suites; see [ADR 0001](docs/adr/0001-conformance-corpus.md) for the design.
+
 ## Documentation
 
 - [Language specification](docs/language-spec.md) defines the draft v0 syntax
   and semantics, including explicitly deferred features.
 - [Canonical JSON](docs/canonical-json.md) documents the machine-readable
   export format, including span offset conventions.
+- [Conformance corpus](conformance/README.md) describes the corpus layout,
+  comparison contract, and how to run or regenerate it.
+- [Architecture decision records](docs/adr/) capture cross-cutting
+  decisions; ADRs marked Proposed await ratification.
 - Public Rust API documentation can be generated with:
 
   ```bash
@@ -154,6 +185,14 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
 ```
 
+For the TypeScript package:
+
+```bash
+pnpm install
+pnpm -C packages/snipx-ts exec tsc --noEmit
+pnpm -C packages/snipx-ts test
+```
+
 Build the fuzz target with a nightly toolchain and `cargo-fuzz`:
 
 ```bash
@@ -166,7 +205,9 @@ Use `bd ready` to find available work and `bd show <id>` for details.
 ## Project Status
 
 The planned v0 Rust reference implementation is complete and released as
-v0.1.1. The language specification remains a draft. Later-version ideas—including rich-document extraction,
+v0.1.1. A TypeScript implementation with full conformance parity lives in
+`packages/snipx-ts`; the conformance corpus holds both implementations to
+the same canonical-JSON behaviour. The language specification remains a draft. Later-version ideas—including rich-document extraction,
 editable rich-text mappings, additional syntax, and RDF-like export—are listed
 under [Deferred And Open Issues](docs/language-spec.md#deferred-and-open-issues)
 in the language specification.
