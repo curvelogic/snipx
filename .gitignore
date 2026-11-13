@@ -4,6 +4,7 @@
 *.db
 .beads-credential-key
 .beads/proxieddb/
+*.gate.lock*
 
 # Local Superpowers/subagent handoff artifacts
 .superpowers/
