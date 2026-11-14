@@ -58,6 +58,36 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 <!-- END BEADS INTEGRATION -->
 
 
+## Beads store location
+
+The beads store lives on the branch `beads-data` (named in
+`.rig/beads-ref`), not on `refs/dolt/data`, which is retired: a cloud
+session can push a branch, so it pushes the store directly. Where this
+file or the managed blocks above say `refs/dolt/data`, read `beads-data`.
+
+- In a cloud session rig provisions the store from the branch; save
+  writes with `rig-relay stage <label>` (it runs `bd sync`).
+- Locally, `bd dolt push` / `bd dolt pull` / `bd sync` work as usual once
+  the store's `origin` points at the branch. `bd bootstrap` cannot clone
+  from a branch, so set up a fresh clone by hand, from the repo root:
+
+  ```bash
+  mkdir -p .beads/embeddeddolt && cd .beads/embeddeddolt &&
+  dolt clone --ref refs/heads/beads-data \
+      git+ssh://git@github.com/curvelogic/snipx.git snipx
+  ```
+
+- To repoint an existing clone (with no bd process running), in
+  `.beads/embeddeddolt/snipx`:
+
+  ```bash
+  dolt remote remove origin
+  dolt remote add --ref refs/heads/beads-data origin \
+      git+ssh://git@github.com/curvelogic/snipx.git
+  ```
+
+  then `bd dolt pull` from the repo root.
+
 ## Build & Test
 
 ```bash
